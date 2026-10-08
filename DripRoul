@@ -1,0 +1,1898 @@
+-- ============================================
+-- Hub DripRoul v2.0 - COMPLETO MELHORADO
+-- Criador Oficial: PedroCarvalhosouz
+-- Discord: https://discord.gg/DpYzJH8Ms
+-- ============================================
+
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+local StarterGui = game:GetService("StarterGui")
+local TextChatService = game:GetService("TextChatService")
+local TextService = game:GetService("TextService")
+local Lighting = game:GetService("Lighting")
+local HttpService = game:GetService("HttpService")
+local TeleportService = game:GetService("TeleportService")
+
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+
+-- ═══════════════════════════════════════════════════════
+-- 🔐 SISTEMA DE KEY REFORÇADO
+-- ═══════════════════════════════════════════════════════
+
+local KEY_URLS = {
+    "https://pastebin.com/raw/aCCKPGRb",
+    "https://pastebin.com/raw/CKXr2zdj",
+}
+
+local FALLBACK_KEYS = {"dripdrop", "dripdrop2025"}
+local correctKey = FALLBACK_KEYS[1]
+
+local function fetchKeyComFallback()
+    for i, url in ipairs(KEY_URLS) do
+        local ok, result = pcall(function()
+            return game:HttpGet(url, true)
+        end)
+        if ok and result and #result > 0 and #result < 200 then
+            local clean = result:gsub("<[^>]+>", ""):gsub("%s+", ""):gsub("[^%w_%-]", "")
+            if #clean >= 3 and #clean <= 50 then
+                return clean
+            end
+        end
+    end
+    return FALLBACK_KEYS[1]
+end
+
+pcall(function()
+    correctKey = fetchKeyComFallback()
+end)
+
+local function isValidKey(inserida)
+    if inserida == correctKey then return true end
+    for _, k in ipairs(FALLBACK_KEYS) do
+        if inserida == k then return true end
+    end
+    return false
+end
+
+local tentativas = 0
+local MAX_TENTATIVAS = 3
+local COOLDOWN_SEGUNDOS = 5
+local emCooldown = false
+
+-- ═══════════════════════════════════════════════════════
+-- 🔔 SISTEMA DE NOTIFICAÇÃO (TOAST)
+-- ═══════════════════════════════════════════════════════
+
+local NotifyGui = Instance.new("ScreenGui")
+NotifyGui.Name = "DripRoul_Notify"
+NotifyGui.ResetOnSpawn = false
+NotifyGui.DisplayOrder = 999
+NotifyGui.Parent = playerGui
+
+local notifyContainer = Instance.new("Frame")
+notifyContainer.Size = UDim2.new(0, 320, 1, 0)
+notifyContainer.Position = UDim2.new(1, -340, 0, 0)
+notifyContainer.BackgroundTransparency = 1
+notifyContainer.Parent = NotifyGui
+
+local notifyLayout = Instance.new("UIListLayout")
+notifyLayout.Padding = UDim.new(0, 8)
+notifyLayout.VerticalAlignment = Enum.VerticalAlignment.Bottom
+notifyLayout.SortOrder = Enum.SortOrder.LayoutOrder
+notifyLayout.Parent = notifyContainer
+
+local function notificar(titulo, mensagem, cor)
+    cor = cor or Color3.fromRGB(0, 140, 255)
+    local toast = Instance.new("Frame")
+    toast.Size = UDim2.new(1, -10, 0, 70)
+    toast.BackgroundColor3 = Color3.fromRGB(18, 18, 25)
+    toast.BorderSizePixel = 0
+    toast.Parent = notifyContainer
+    Instance.new("UICorner", toast).CornerRadius = UDim.new(0, 10)
+    local stroke = Instance.new("UIStroke")
+    stroke.Color = cor
+    stroke.Thickness = 1.5
+    stroke.Parent = toast
+    local accent = Instance.new("Frame")
+    accent.Size = UDim2.new(0, 4, 1, 0)
+    accent.BackgroundColor3 = cor
+    accent.BorderSizePixel = 0
+    accent.Parent = toast
+    Instance.new("UICorner", accent).CornerRadius = UDim.new(0, 10)
+    local tLbl = Instance.new("TextLabel")
+    tLbl.Size = UDim2.new(1, -20, 0, 24)
+    tLbl.Position = UDim2.new(0, 14, 0, 8)
+    tLbl.BackgroundTransparency = 1
+    tLbl.Text = titulo
+    tLbl.TextColor3 = cor
+    tLbl.Font = Enum.Font.GothamBold
+    tLbl.TextSize = 14
+    tLbl.TextXAlignment = Enum.TextXAlignment.Left
+    tLbl.Parent = toast
+    local mLbl = Instance.new("TextLabel")
+    mLbl.Size = UDim2.new(1, -20, 0, 30)
+    mLbl.Position = UDim2.new(0, 14, 0, 32)
+    mLbl.BackgroundTransparency = 1
+    mLbl.Text = mensagem
+    mLbl.TextColor3 = Color3.fromRGB(220, 220, 230)
+    mLbl.Font = Enum.Font.Gotham
+    mLbl.TextSize = 12
+    mLbl.TextXAlignment = Enum.TextXAlignment.Left
+    mLbl.TextWrapped = true
+    mLbl.Parent = toast
+    toast.Position = UDim2.new(1, 50, 0, 0)
+    TweenService:Create(toast, TweenInfo.new(0.4, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+        Position = UDim2.new(0, 0, 0, 0)
+    }):Play()
+    task.wait(4)
+    local fade = TweenService:Create(toast, TweenInfo.new(0.4), {
+        Position = UDim2.new(1, 50, 0, 0),
+        BackgroundTransparency = 1
+    })
+    fade:Play()
+    TweenService:Create(stroke, TweenInfo.new(0.4), {Transparency = 1}):Play()
+    fade.Completed:Wait()
+    toast:Destroy()
+end
+
+-- ═══════════════════════════════════════════════════════
+-- ✨ EFEITOS VISUAIS
+-- ═══════════════════════════════════════════════════════
+
+local blurEffect = Instance.new("BlurEffect")
+blurEffect.Size = 0
+blurEffect.Parent = Lighting
+
+local function setBlur(size)
+    TweenService:Create(blurEffect, TweenInfo.new(0.3), {Size = size}):Play()
+end
+
+local function criarSpinner(parent)
+    local spinner = Instance.new("Frame")
+    spinner.Size = UDim2.new(0, 40, 0, 40)
+    spinner.BackgroundTransparency = 1
+    spinner.Visible = false
+    spinner.Parent = parent
+    local stroke = Instance.new("UIStroke")
+    stroke.Color = Color3.fromRGB(0, 180, 255)
+    stroke.Thickness = 3
+    stroke.Transparency = 0.2
+    stroke.Parent = spinner
+    Instance.new("UICorner", spinner).CornerRadius = UDim.new(1, 0)
+    task.spawn(function()
+        while spinner.Parent do
+            for i = 0, 360, 20 do
+                if not spinner.Parent then break end
+                spinner.Rotation = i
+                task.wait(0.03)
+            end
+        end
+    end)
+    return spinner
+end
+
+-- ═══════════════════════════════════════════════════════
+-- 🔒 TELA DE BLOQUEIO
+-- ═══════════════════════════════════════════════════════
+
+local function mostrarBloqueio(motivo)
+    setBlur(20)
+    local bloq = Instance.new("ScreenGui")
+    bloq.Name = "DripBloq"
+    bloq.ResetOnSpawn = false
+    bloq.DisplayOrder = 999
+    bloq.IgnoreGuiInset = true
+    bloq.Parent = playerGui
+
+    local bg = Instance.new("Frame")
+    bg.Size = UDim2.new(1, 0, 1, 0)
+    bg.BackgroundColor3 = Color3.new(0, 0, 0)
+    bg.BackgroundTransparency = 0.5
+    bg.BorderSizePixel = 0
+    bg.Parent = bloq
+
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(0, 440, 0, 300)
+    frame.Position = UDim2.new(0.5, -220, 0.5, -150)
+    frame.BackgroundColor3 = Color3.fromRGB(18, 18, 25)
+    frame.BorderSizePixel = 0
+    frame.Parent = bloq
+    Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 16)
+    local stroke = Instance.new("UIStroke")
+    stroke.Color = Color3.fromRGB(255, 60, 80)
+    stroke.Thickness = 2
+    stroke.Transparency = 0.2
+    stroke.Parent = frame
+    local grad = Instance.new("UIGradient")
+    grad.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(40, 10, 20)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(15, 15, 25)),
+    })
+    grad.Rotation = 45
+    grad.Parent = frame
+
+    local icon = Instance.new("TextLabel")
+    icon.Size = UDim2.new(1, 0, 0, 60)
+    icon.Position = UDim2.new(0, 0, 0, 15)
+    icon.BackgroundTransparency = 1
+    icon.Text = "🔒"
+    icon.TextSize = 50
+    icon.Font = Enum.Font.GothamBold
+    icon.Parent = frame
+
+    local titulo = Instance.new("TextLabel")
+    titulo.Size = UDim2.new(1, 0, 0, 30)
+    titulo.Position = UDim2.new(0, 0, 0, 80)
+    titulo.BackgroundTransparency = 1
+    titulo.Text = "DRIPROUL BLOQUEADO"
+    titulo.TextColor3 = Color3.fromRGB(255, 80, 100)
+    titulo.Font = Enum.Font.GothamBold
+    titulo.TextSize = 22
+    titulo.Parent = frame
+
+    local subtitulo = Instance.new("TextLabel")
+    subtitulo.Size = UDim2.new(1, -30, 0, 40)
+    subtitulo.Position = UDim2.new(0, 15, 0, 118)
+    subtitulo.BackgroundTransparency = 1
+    subtitulo.Text = motivo
+    subtitulo.TextColor3 = Color3.fromRGB(200, 200, 220)
+    subtitulo.Font = Enum.Font.GothamMedium
+    subtitulo.TextSize = 14
+    subtitulo.TextWrapped = true
+    subtitulo.Parent = frame
+
+    local discordBox = Instance.new("TextButton")
+    discordBox.Size = UDim2.new(1, -40, 0, 56)
+    discordBox.Position = UDim2.new(0, 20, 0, 175)
+    discordBox.BackgroundColor3 = Color3.fromRGB(88, 101, 242)
+    discordBox.Text = ""
+    discordBox.BorderSizePixel = 0
+    discordBox.Parent = frame
+    Instance.new("UICorner", discordBox).CornerRadius = UDim.new(0, 10)
+    local dGrad = Instance.new("UIGradient")
+    dGrad.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(88, 101, 242)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(120, 60, 220)),
+    })
+    dGrad.Rotation = 45
+    dGrad.Parent = discordBox
+    local dTxt = Instance.new("TextLabel")
+    dTxt.Size = UDim2.new(1, 0, 1, 0)
+    dTxt.BackgroundTransparency = 1
+    dTxt.Text = "📢  ENTRE NO DISCORD  📢"
+    dTxt.TextColor3 = Color3.fromRGB(255, 255, 255)
+    dTxt.Font = Enum.Font.GothamBold
+    dTxt.TextSize = 15
+    dTxt.Parent = discordBox
+    local dLink = Instance.new("TextButton")
+    dLink.Size = UDim2.new(1, -40, 0, 24)
+    dLink.Position = UDim2.new(0, 20, 0, 240)
+    dLink.BackgroundTransparency = 1
+    dLink.Text = "discord.gg/DpYzJH8Ms"
+    dLink.TextColor3 = Color3.fromRGB(150, 180, 255)
+    dLink.Font = Enum.Font.GothamMedium
+    dLink.TextSize = 13
+    dLink.Parent = frame
+
+    discordBox.MouseButton1Click:Connect(function()
+        if setclipboard then
+            setclipboard("https://discord.gg/DpYzJH8Ms")
+            dTxt.Text = "✅ LINK COPIADO!"
+            task.wait(2)
+            dTxt.Text = "📢  ENTRE NO DISCORD  📢"
+        end
+    end)
+    dLink.MouseButton1Click:Connect(function()
+        if setclipboard then
+            setclipboard("https://discord.gg/DpYzJH8Ms")
+            dLink.Text = "✅ COPIADO!"
+            task.wait(2)
+            dLink.Text = "discord.gg/DpYzJH8Ms"
+        end
+    end)
+end
+
+-- ═══════════════════════════════════════════════════════
+-- 🎮 CONSTANTES
+-- ═══════════════════════════════════════════════════════
+
+local TOM_SCRIPT = "https://rawscripts.net/raw/Universal-Script-Auto-jjs-EB-do-delta-126144"
+local LINK_DO_DISCORD = "https://discord.gg/DpYzJH8Ms"
+
+if playerGui:FindFirstChild("DripRoul_GUI") then playerGui.DripRoul_GUI:Destroy() end
+
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "DripRoul_GUI"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+ScreenGui.Parent = playerGui
+
+-- ═══════════════════════════════════════════════════════
+-- 🛠️ FUNÇÕES UTILITÁRIAS
+-- ═══════════════════════════════════════════════════════
+
+local function addStroke(parent, color, thickness, transparency)
+    local s = Instance.new("UIStroke")
+    s.Color = color or Color3.fromRGB(0, 160, 255)
+    s.Thickness = thickness or 1.2
+    s.Transparency = transparency or 0.4
+    s.Parent = parent
+    return s
+end
+
+local function makeDraggable(frame)
+    local dragging, dragInput, dragStart, startPos
+    local function update(input)
+        local delta = input.Position - dragStart
+        frame.Position = UDim2.new(
+            startPos.X.Scale, startPos.X.Offset + delta.X,
+            startPos.Y.Scale, startPos.Y.Offset + delta.Y
+        )
+    end
+    frame.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            dragStart = input.Position
+            startPos = frame.Position
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then dragging = false end
+            end)
+        end
+    end)
+    frame.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+            dragInput = input
+        end
+    end)
+    UserInputService.InputChanged:Connect(function(input)
+        if input == dragInput and dragging then update(input) end
+    end)
+end
+
+local function addHover(btn, corNormal, corHover)
+    corNormal = corNormal or btn.BackgroundColor3
+    corHover = corHover or Color3.fromRGB(0, 180, 255)
+    btn.MouseEnter:Connect(function()
+        TweenService:Create(btn, TweenInfo.new(0.15), {BackgroundColor3 = corHover}):Play()
+    end)
+    btn.MouseLeave:Connect(function()
+        TweenService:Create(btn, TweenInfo.new(0.15), {BackgroundColor3 = corNormal}):Play()
+    end)
+end
+
+-- ═══════════════════════════════════════════════════════
+-- 💀 ANIMAÇÃO INICIAL
+-- ═══════════════════════════════════════════════════════
+
+local DripRoulRun = Instance.new("TextLabel")
+DripRoulRun.Text = "💀"
+DripRoulRun.TextSize = 120
+DripRoulRun.Font = Enum.Font.GothamBold
+DripRoulRun.TextColor3 = Color3.fromRGB(255, 255, 255)
+DripRoulRun.Size = UDim2.new(0, 160, 0, 160)
+DripRoulRun.Position = UDim2.new(-0.3, 0, 0.5, -80)
+DripRoulRun.BackgroundTransparency = 1
+DripRoulRun.ZIndex = 999
+DripRoulRun.Parent = ScreenGui
+
+task.spawn(function()
+    local tween = TweenService:Create(DripRoulRun, TweenInfo.new(2.5, Enum.EasingStyle.Quad), {
+        Position = UDim2.new(1.3, 0, 0.5, -80)
+    })
+    tween:Play()
+    tween.Completed:Wait()
+    DripRoulRun:Destroy()
+end)
+
+-- ═══════════════════════════════════════════════════════
+-- 🔑 TELA DE CHAVE
+-- ═══════════════════════════════════════════════════════
+
+local KeyFrame = Instance.new("Frame")
+KeyFrame.Size = UDim2.new(0, 360, 0, 240)
+KeyFrame.Position = UDim2.new(0.5, -180, 0.5, -120)
+KeyFrame.BackgroundColor3 = Color3.fromRGB(14, 14, 18)
+KeyFrame.Parent = ScreenGui
+Instance.new("UICorner", KeyFrame).CornerRadius = UDim.new(0, 14)
+addStroke(KeyFrame, Color3.fromRGB(0, 140, 255), 1.5, 0.35)
+
+local KeyAccent = Instance.new("Frame")
+KeyAccent.Size = UDim2.new(1, 0, 0, 4)
+KeyAccent.BackgroundColor3 = Color3.fromRGB(0, 160, 255)
+KeyAccent.BorderSizePixel = 0
+KeyAccent.Parent = KeyFrame
+Instance.new("UICorner", KeyAccent).CornerRadius = UDim.new(0, 14)
+
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(1, 0, 0, 48)
+Title.Position = UDim2.new(0, 0, 0, 12)
+Title.BackgroundTransparency = 1
+Title.Text = "DRIPROUL • CHAVE"
+Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+Title.Font = Enum.Font.GothamBold
+Title.TextSize = 22
+Title.Parent = KeyFrame
+
+local SubTitle = Instance.new("TextLabel")
+SubTitle.Size = UDim2.new(1, 0, 0, 20)
+SubTitle.Position = UDim2.new(0, 0, 0, 48)
+SubTitle.BackgroundTransparency = 1
+SubTitle.Text = "Digite a chave para continuar"
+SubTitle.TextColor3 = Color3.fromRGB(140, 140, 160)
+SubTitle.Font = Enum.Font.Gotham
+SubTitle.TextSize = 13
+SubTitle.Parent = KeyFrame
+
+local KeyBox = Instance.new("TextBox")
+KeyBox.Size = UDim2.new(0.86, 0, 0, 42)
+KeyBox.Position = UDim2.new(0.07, 0, 0.40, 0)
+KeyBox.BackgroundColor3 = Color3.fromRGB(28, 28, 36)
+KeyBox.Text = ""
+KeyBox.PlaceholderText = "Cole a key aqui..."
+KeyBox.PlaceholderColor3 = Color3.fromRGB(100, 100, 120)
+KeyBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+KeyBox.Font = Enum.Font.Gotham
+KeyBox.TextSize = 15
+KeyBox.Parent = KeyFrame
+Instance.new("UICorner", KeyBox).CornerRadius = UDim.new(0, 9)
+addStroke(KeyBox, Color3.fromRGB(50, 50, 70), 1, 0.3)
+
+local SubmitBtn = Instance.new("TextButton")
+SubmitBtn.Size = UDim2.new(0.86, 0, 0, 42)
+SubmitBtn.Position = UDim2.new(0.07, 0, 0.62, 0)
+SubmitBtn.BackgroundColor3 = Color3.fromRGB(0, 140, 255)
+SubmitBtn.Text = "CONFIRMAR"
+SubmitBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+SubmitBtn.Font = Enum.Font.GothamBold
+SubmitBtn.TextSize = 15
+SubmitBtn.Parent = KeyFrame
+Instance.new("UICorner", SubmitBtn).CornerRadius = UDim.new(0, 9)
+addHover(SubmitBtn, Color3.fromRGB(0, 140, 255), Color3.fromRGB(0, 180, 255))
+
+local TentativasLbl = Instance.new("TextLabel")
+TentativasLbl.Size = UDim2.new(1, 0, 0, 18)
+TentativasLbl.Position = UDim2.new(0, 0, 0.86, 0)
+TentativasLbl.BackgroundTransparency = 1
+TentativasLbl.Text = "Tentativas restantes: " .. MAX_TENTATIVAS
+TentativasLbl.TextColor3 = Color3.fromRGB(140, 140, 160)
+TentativasLbl.Font = Enum.Font.Gotham
+TentativasLbl.TextSize = 11
+TentativasLbl.Parent = KeyFrame
+
+makeDraggable(KeyFrame)
+
+-- ═══════════════════════════════════════════════════════
+-- 🎯 BOLA FLUTUANTE
+-- ═══════════════════════════════════════════════════════
+
+local Ball = Instance.new("TextButton")
+Ball.Size = UDim2.new(0, 62, 0, 62)
+Ball.Position = UDim2.new(0.88, 0, 0.42, 0)
+Ball.BackgroundColor3 = Color3.fromRGB(0, 140, 255)
+Ball.Text = ""
+Ball.Visible = false
+Ball.Parent = ScreenGui
+Instance.new("UICorner", Ball).CornerRadius = UDim.new(1, 0)
+addStroke(Ball, Color3.fromRGB(0, 200, 255), 2, 0.3)
+
+local BallEmoji = Instance.new("TextLabel")
+BallEmoji.Text = "💀"
+BallEmoji.TextSize = 36
+BallEmoji.Font = Enum.Font.GothamBold
+BallEmoji.Size = UDim2.new(1, 0, 1, 0)
+BallEmoji.BackgroundTransparency = 1
+BallEmoji.Parent = Ball
+makeDraggable(Ball)
+
+task.spawn(function()
+    while Ball.Parent do
+        TweenService:Create(Ball, TweenInfo.new(1), {Size = UDim2.new(0, 68, 0, 68)}):Play()
+        task.wait(1)
+        TweenService:Create(Ball, TweenInfo.new(1), {Size = UDim2.new(0, 62, 0, 62)}):Play()
+        task.wait(1)
+    end
+end)
+
+-- ═══════════════════════════════════════════════════════
+-- 🖥️ MENU PRINCIPAL
+-- ═══════════════════════════════════════════════════════
+
+local MainFrame = Instance.new("Frame")
+MainFrame.Size = UDim2.new(0, 560, 0, 460)
+MainFrame.Position = UDim2.new(0.5, -280, 0.5, -230)
+MainFrame.BackgroundColor3 = Color3.fromRGB(12, 12, 16)
+MainFrame.Visible = false
+MainFrame.Parent = ScreenGui
+Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 14)
+addStroke(MainFrame, Color3.fromRGB(0, 140, 255), 1.4, 0.4)
+
+local FundoGrad = Instance.new("Frame")
+FundoGrad.Size = UDim2.new(1, 0, 1, 0)
+FundoGrad.BackgroundColor3 = Color3.fromRGB(10, 10, 20)
+FundoGrad.BackgroundTransparency = 0.4
+FundoGrad.BorderSizePixel = 0
+FundoGrad.ZIndex = 0
+FundoGrad.ClipsDescendants = true
+FundoGrad.Parent = MainFrame
+Instance.new("UICorner", FundoGrad).CornerRadius = UDim.new(0, 14)
+local grad = Instance.new("UIGradient")
+grad.Color = ColorSequence.new({
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(0, 30, 70)),
+    ColorSequenceKeypoint.new(0.5, Color3.fromRGB(10, 10, 25)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(0, 15, 40)),
+})
+grad.Rotation = 45
+grad.Parent = FundoGrad
+
+local SkullBG = Instance.new("TextLabel")
+SkullBG.Size = UDim2.new(0, 380, 0, 380)
+SkullBG.Position = UDim2.new(1, -200, 0.5, -190)
+SkullBG.BackgroundTransparency = 1
+SkullBG.Text = "💀"
+SkullBG.TextSize = 340
+SkullBG.Font = Enum.Font.GothamBold
+SkullBG.TextColor3 = Color3.fromRGB(120, 200, 255)
+SkullBG.TextTransparency = 0.78
+SkullBG.Rotation = -15
+SkullBG.ZIndex = 1
+SkullBG.Parent = FundoGrad
+
+local SkullBG2 = Instance.new("TextLabel")
+SkullBG2.Size = UDim2.new(0, 200, 0, 200)
+SkullBG2.Position = UDim2.new(0, -60, 0, -60)
+SkullBG2.BackgroundTransparency = 1
+SkullBG2.Text = "💀"
+SkullBG2.TextSize = 180
+SkullBG2.Font = Enum.Font.GothamBold
+SkullBG2.TextColor3 = Color3.fromRGB(255, 80, 100)
+SkullBG2.TextTransparency = 0.85
+SkullBG2.Rotation = 25
+SkullBG2.ZIndex = 1
+SkullBG2.Parent = FundoGrad
+
+local Sidebar = Instance.new("Frame")
+Sidebar.Size = UDim2.new(0, 138, 1, 0)
+Sidebar.BackgroundColor3 = Color3.fromRGB(18, 18, 24)
+Sidebar.BackgroundTransparency = 0.15
+Sidebar.ZIndex = 2
+Sidebar.Parent = MainFrame
+Instance.new("UICorner", Sidebar).CornerRadius = UDim.new(0, 14)
+
+local Content = Instance.new("Frame")
+Content.Size = UDim2.new(1, -150, 1, -20)
+Content.Position = UDim2.new(0, 146, 0, 10)
+Content.BackgroundTransparency = 1
+Content.ZIndex = 3
+Content.Parent = MainFrame
+
+local ContentTitle = Instance.new("TextLabel")
+ContentTitle.Size = UDim2.new(1, 0, 0, 30)
+ContentTitle.BackgroundTransparency = 1
+ContentTitle.Text = "Patentes"
+ContentTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+ContentTitle.Font = Enum.Font.GothamBold
+ContentTitle.TextSize = 20
+ContentTitle.TextXAlignment = Enum.TextXAlignment.Left
+ContentTitle.ZIndex = 3
+ContentTitle.Parent = Content
+
+local CloseX = Instance.new("TextButton")
+CloseX.Size = UDim2.new(0, 28, 0, 28)
+CloseX.Position = UDim2.new(1, -36, 0, 8)
+CloseX.BackgroundColor3 = Color3.fromRGB(180, 30, 40)
+CloseX.Text = "X"
+CloseX.TextColor3 = Color3.fromRGB(255, 255, 255)
+CloseX.Font = Enum.Font.GothamBold
+CloseX.TextSize = 14
+CloseX.ZIndex = 10
+CloseX.Parent = MainFrame
+Instance.new("UICorner", CloseX).CornerRadius = UDim.new(0, 6)
+addHover(CloseX, Color3.fromRGB(180, 30, 40), Color3.fromRGB(230, 40, 50))
+
+local abas = {}
+local function createTab(name, icon, y)
+    local tab = Instance.new("TextButton")
+    tab.Size = UDim2.new(1, -16, 0, 32)
+    tab.Position = UDim2.new(0, 8, 0, y)
+    tab.BackgroundColor3 = Color3.fromRGB(28, 28, 38)
+    tab.BackgroundTransparency = 0.35
+    tab.Text = " " .. icon .. " " .. name
+    tab.TextColor3 = Color3.fromRGB(180, 180, 200)
+    tab.Font = Enum.Font.GothamMedium
+    tab.TextSize = 13
+    tab.TextXAlignment = Enum.TextXAlignment.Left
+    tab.ZIndex = 3
+    tab.Parent = Sidebar
+    Instance.new("UICorner", tab).CornerRadius = UDim.new(0, 8)
+    addHover(tab, Color3.fromRGB(28, 28, 38), Color3.fromRGB(40, 40, 55))
+    table.insert(abas, tab)
+    return tab
+end
+
+local TabPatentes = createTab("Patentes", "🎖️", 14)
+local TabPerguntas = createTab("Perguntas", "❓", 52)
+local TabParkour = createTab("Parkour", "🏃", 90)
+local TabJJs = createTab("JJs", "⚔️", 128)
+local TabFarm = createTab("Farm", "🌾", 166)
+local TabVolvers = createTab("VOLVERS", "🔄", 204)
+local TabOutros = createTab("Outros", "💬", 242)
+local TabExtras = createTab("EXTRAS", "⭐", 280)
+local TabIA = createTab("IA", "🤖", 318)
+local TabCreditos = createTab("CRÉDITOS", "👑", 356)
+
+-- ═══════════════════════════════════════════════════════
+-- 📋 FUNÇÃO DE LINHA COPIÁVEL
+-- ═══════════════════════════════════════════════════════
+
+local function addCopyRow(parent, text)
+    local row = Instance.new("Frame")
+    row.Size = UDim2.new(1, -10, 0, 32)
+    row.BackgroundColor3 = Color3.fromRGB(24, 24, 32)
+    row.BackgroundTransparency = 0.25
+    row.ZIndex = 3
+    row.Parent = parent
+    Instance.new("UICorner", row).CornerRadius = UDim.new(0, 7)
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(1, -78, 1, 0)
+    label.Position = UDim2.new(0, 12, 0, 0)
+    label.BackgroundTransparency = 1
+    label.Text = text
+    label.TextColor3 = Color3.fromRGB(230, 230, 240)
+    label.Font = Enum.Font.Gotham
+    label.TextSize = 13
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.TextTruncate = Enum.TextTruncate.AtEnd
+    label.ZIndex = 4
+    label.Parent = row
+    local copyBtn = Instance.new("TextButton")
+    copyBtn.Size = UDim2.new(0, 62, 0, 24)
+    copyBtn.Position = UDim2.new(1, -70, 0.5, -12)
+    copyBtn.BackgroundColor3 = Color3.fromRGB(0, 130, 220)
+    copyBtn.Text = "Copiar"
+    copyBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    copyBtn.Font = Enum.Font.GothamBold
+    copyBtn.TextSize = 12
+    copyBtn.ZIndex = 4
+    copyBtn.Parent = row
+    Instance.new("UICorner", copyBtn).CornerRadius = UDim.new(0, 6)
+    addHover(copyBtn, Color3.fromRGB(0, 130, 220), Color3.fromRGB(0, 170, 255))
+    copyBtn.MouseButton1Click:Connect(function()
+        if setclipboard then
+            setclipboard(text)
+            copyBtn.Text = "✓"
+            notificar("Copiado", text, Color3.fromRGB(0, 200, 130))
+            task.wait(1)
+            copyBtn.Text = "Copiar"
+        end
+    end)
+end
+
+-- ═══════════════════════════════════════════════════════
+-- 🎖️ ABA PATENTES
+-- ═══════════════════════════════════════════════════════
+
+local PatentesScroll = Instance.new("ScrollingFrame")
+PatentesScroll.Size = UDim2.new(1, 0, 1, -42)
+PatentesScroll.Position = UDim2.new(0, 0, 0, 42)
+PatentesScroll.BackgroundTransparency = 1
+PatentesScroll.ScrollBarThickness = 3
+PatentesScroll.Visible = true
+PatentesScroll.ZIndex = 3
+PatentesScroll.Parent = Content
+local PatentesList = Instance.new("UIListLayout")
+PatentesList.Padding = UDim.new(0, 5)
+PatentesList.Parent = PatentesScroll
+
+local hierarchy = {
+    {cat = "Criador", items = {"[CR] Criador", "[SCR] Sub Criador"}},
+    {cat = "Administração", items = {"[ADM-G] Administrador Geral", "[ADM] Administrador", "[SUP-ADM] Supervisor Administrativo", "[MOD] Moderador"}},
+    {cat = "Supremacia", items = {"[SC] Sócios"}},
+    {cat = "Alto Comando", items = {"[CMT] Comandante", "[SCMT] Subcomandante"}},
+    {cat = "Oficiais da Elite", items = {"[ER] Elite Real", "[ES] Elite Secreta", "[EM] Elite Militar"}},
+    {cat = "Oficiais Generais", items = {"[GEN EX] General de Exército", "[GEN DV] General de Divisão", "[GEN BDA] General de Brigada"}},
+    {cat = "Oficiais Superiores", items = {"[CEL] Coronel", "[TEN-CEL] Tenente Coronel", "[MAJ] Major"}},
+    {cat = "Oficiais Intermediários", items = {"[CAP] Capitão"}},
+    {cat = "Oficiais Subalternos", items = {"[1º TEN] Primeiro Tenente", "[2º TEN] Segundo Tenente", "[AAO] Aspirante a Oficial"}},
+    {cat = "Praças Especiais", items = {"[CT] Cadete"}},
+    {cat = "Graduados", items = {"[ST] Subtenente", "[1º SGT] Primeiro Sargento", "[2º SGT] Segundo Sargento", "[3º SGT] Terceiro Sargento"}},
+    {cat = "Praças", items = {"[CB] Cabo", "[SLD] Soldado", "[REC] Recruta"}}
+}
+
+for _, section in ipairs(hierarchy) do
+    local catLabel = Instance.new("TextLabel")
+    catLabel.Size = UDim2.new(1, -8, 0, 24)
+    catLabel.BackgroundTransparency = 1
+    catLabel.Text = " " .. section.cat
+    catLabel.TextColor3 = Color3.fromRGB(0, 180, 255)
+    catLabel.Font = Enum.Font.GothamBold
+    catLabel.TextSize = 13
+    catLabel.TextXAlignment = Enum.TextXAlignment.Left
+    catLabel.ZIndex = 3
+    catLabel.Parent = PatentesScroll
+    for _, item in ipairs(section.items) do
+        addCopyRow(PatentesScroll, item)
+    end
+end
+
+PatentesList:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+    PatentesScroll.CanvasSize = UDim2.new(0, 0, 0, PatentesList.AbsoluteContentSize.Y + 20)
+end)
+
+-- ═══════════════════════════════════════════════════════
+-- ❓ ABA PERGUNTAS
+-- ═══════════════════════════════════════════════════════
+
+local PerguntasScroll = Instance.new("ScrollingFrame")
+PerguntasScroll.Size = UDim2.new(1, 0, 1, -42)
+PerguntasScroll.Position = UDim2.new(0, 0, 0, 42)
+PerguntasScroll.BackgroundTransparency = 1
+PerguntasScroll.ScrollBarThickness = 3
+PerguntasScroll.Visible = false
+PerguntasScroll.ZIndex = 3
+PerguntasScroll.Parent = Content
+local PerguntasList = Instance.new("UIListLayout")
+PerguntasList.Padding = UDim.new(0, 5)
+PerguntasList.Parent = PerguntasScroll
+
+local siglas = {
+    {"AMAN", "Academia de Agulhas Negras"},
+    {"EPC", "Escola Preparatória de Coronéis"},
+    {"APG", "Academia Preparatória de Generais"},
+    {"BIP", "Batalhão de Infantaria Paraquedistas"},
+    {"BPE", "Batalhão da Polícia do Exército"},
+    {"BFE", "Batalhão de Forças Especiais"},
+    {"BAC", "Batalhão de Ações de Comandos"},
+    {"CIE", "Centro de Inteligência do Exército"},
+    {"CIGS", "Centro de Instrução de Guerras na Selva"},
+    {"CYBER", "Comando de Defesa Cibernética"},
+    {"BI-CAAT", "Batalhão de Infantaria da Caatinga"},
+    {"REC-MEC", "Regimento da Cavalaria Mecânica"}
+}
+for _, data in ipairs(siglas) do
+    addCopyRow(PerguntasScroll, data[1] .. ": " .. data[2])
+end
+PerguntasList:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+    PerguntasScroll.CanvasSize = UDim2.new(0, 0, 0, PerguntasList.AbsoluteContentSize.Y + 20)
+end)
+
+-- ═══════════════════════════════════════════════════════
+-- 🏃 ABA PARKOUR
+-- ═══════════════════════════════════════════════════════
+
+local ParkourContent = Instance.new("Frame")
+ParkourContent.Size = UDim2.new(1, 0, 1, -42)
+ParkourContent.Position = UDim2.new(0, 0, 0, 42)
+ParkourContent.BackgroundTransparency = 1
+ParkourContent.Visible = false
+ParkourContent.ZIndex = 3
+ParkourContent.Parent = Content
+
+local ParkourBtn = Instance.new("TextButton")
+ParkourBtn.Size = UDim2.new(0.92, 0, 0, 48)
+ParkourBtn.Position = UDim2.new(0.04, 0, 0.08, 0)
+ParkourBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+ParkourBtn.Text = "Auxiliar de Parkour • DESLIGADO"
+ParkourBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+ParkourBtn.Font = Enum.Font.GothamBold
+ParkourBtn.TextSize = 15
+ParkourBtn.ZIndex = 3
+ParkourBtn.Parent = ParkourContent
+Instance.new("UICorner", ParkourBtn).CornerRadius = UDim.new(0, 10)
+addHover(ParkourBtn, Color3.fromRGB(30, 30, 40), Color3.fromRGB(45, 45, 60))
+
+local Hitboxes = {}
+local parkourEnabled = false
+
+local hitboxData = {
+    {pos = Vector3.new(185.03, 5.04, -661.62), size = Vector3.new(4.00, 0.50, 16.00)},
+    {pos = Vector3.new(185.39, 13.26, -661.39), size = Vector3.new(4.00, 0.50, 16.00)},
+    {pos = Vector3.new(185.11, 21.28, -661.68), size = Vector3.new(4.00, 0.50, 16.00)},
+    {pos = Vector3.new(185.30, 29.29, -661.72), size = Vector3.new(4.00, 0.50, 16.00)},
+    {pos = Vector3.new(186.08, 37.36, -661.76), size = Vector3.new(4.00, 0.50, 16.00)},
+    {pos = Vector3.new(186.08, 45.36, -661.76), size = Vector3.new(4.00, 0.50, 16.00)},
+    {pos = Vector3.new(186.25, 53.36, -661.86), size = Vector3.new(4.00, 0.50, 16.00)},
+    {pos = Vector3.new(185.82, 61.36, -662.00), size = Vector3.new(4.00, 0.50, 16.00)},
+    {pos = Vector3.new(185.60, 69.40, -661.98), size = Vector3.new(4.00, 0.50, 16.00)},
+    {pos = Vector3.new(185.71, 77.42, -661.90), size = Vector3.new(4.00, 0.50, 15.00)},
+    {pos = Vector3.new(185.28, 85.44, -662.14), size = Vector3.new(4.00, 0.50, 16.00)},
+    {pos = Vector3.new(185.42, 93.48, -662.05), size = Vector3.new(4.00, 0.50, 16.00)},
+    {pos = Vector3.new(185.94, 101.46, -661.80), size = Vector3.new(4.00, 0.50, 15.00)},
+    {pos = Vector3.new(185.94, 109.48, -661.78), size = Vector3.new(4.00, 0.50, 17.00)},
+    {pos = Vector3.new(185.08, 5.26, -618.66), size = Vector3.new(4.00, 0.50, 16.00)},
+    {pos = Vector3.new(185.36, 13.28, -618.65), size = Vector3.new(4.00, 0.50, 15.00)},
+    {pos = Vector3.new(185.32, 21.29, -618.70), size = Vector3.new(4.00, 0.50, 16.00)},
+    {pos = Vector3.new(185.65, 29.34, -618.67), size = Vector3.new(4.00, 0.50, 16.00)},
+    {pos = Vector3.new(186.12, 37.36, -618.43), size = Vector3.new(4.00, 0.50, 15.00)},
+    {pos = Vector3.new(186.30, 45.34, -617.87), size = Vector3.new(5.00, 0.50, 16.00)},
+    {pos = Vector3.new(185.41, 53.36, -618.05), size = Vector3.new(4.00, 0.50, 15.00)},
+    {pos = Vector3.new(185.62, 61.40, -617.79), size = Vector3.new(4.00, 0.50, 16.00)},
+    {pos = Vector3.new(185.58, 69.40, -617.79), size = Vector3.new(4.00, 0.50, 17.00)},
+    {pos = Vector3.new(185.87, 77.42, -618.33), size = Vector3.new(4.00, 0.50, 15.00)},
+    {pos = Vector3.new(185.73, 85.44, -618.62), size = Vector3.new(4.00, 0.50, 16.00)},
+    {pos = Vector3.new(185.68, 93.48, -618.49), size = Vector3.new(4.00, 0.50, 15.00)},
+    {pos = Vector3.new(185.83, 101.46, -617.76), size = Vector3.new(4.00, 0.50, 16.00)},
+    {pos = Vector3.new(185.57, 109.48, -618.45), size = Vector3.new(4.00, 0.50, 15.00)},
+    {pos = Vector3.new(270.22, 4.24, -661.72), size = Vector3.new(5.00, 0.50, 5.00)},
+    {pos = Vector3.new(277.86, 4.24, -655.56), size = Vector3.new(5.00, 0.50, 5.00)},
+    {pos = Vector3.new(269.80, 4.24, -649.96), size = Vector3.new(5.00, 0.50, 5.00)},
+    {pos = Vector3.new(284.45, 4.24, -660.72), size = Vector3.new(5.00, 0.50, 5.00)},
+    {pos = Vector3.new(284.59, 4.24, -650.23), size = Vector3.new(5.00, 0.50, 5.00)},
+    {pos = Vector3.new(267.14, 5.04, -627.94), size = Vector3.new(4.00, 0.50, 32.00)},
+    {pos = Vector3.new(288.33, 5.04, -627.86), size = Vector3.new(4.00, 0.50, 31.00)},
+    {pos = Vector3.new(277.48, 7.63, -591.97), size = Vector3.new(4.00, 0.50, 27.00)},
+    {pos = Vector3.new(271.76, 7.64, -569.98), size = Vector3.new(5.00, 0.50, 5.00)},
+    {pos = Vector3.new(279.08, 7.64, -567.95), size = Vector3.new(5.00, 0.50, 5.00)},
+    {pos = Vector3.new(265.48, 7.64, -564.93), size = Vector3.new(5.00, 0.50, 5.00)},
+    {pos = Vector3.new(271.34, 7.64, -559.70), size = Vector3.new(5.00, 0.50, 5.00)},
+    {pos = Vector3.new(259.46, 7.64, -561.92), size = Vector3.new(5.00, 0.50, 5.00)},
+    {pos = Vector3.new(260.50, 7.64, -554.72), size = Vector3.new(5.00, 0.50, 5.00)},
+    {pos = Vector3.new(250.93, 7.64, -561.91), size = Vector3.new(5.00, 0.50, 5.00)},
+    {pos = Vector3.new(248.66, 7.64, -554.60), size = Vector3.new(5.00, 0.50, 5.00)},
+    {pos = Vector3.new(243.06, 7.64, -565.74), size = Vector3.new(5.00, 0.50, 5.00)},
+    {pos = Vector3.new(235.96, 7.64, -560.93), size = Vector3.new(5.00, 0.50, 5.00)},
+    {pos = Vector3.new(240.08, 7.64, -592.47), size = Vector3.new(4.00, 0.50, 27.00)},
+    {pos = Vector3.new(394.19, 5.06, -850.78), size = Vector3.new(5.00, 0.50, 5.00)},
+    {pos = Vector3.new(389.19, 7.45, -855.82), size = Vector3.new(5.00, 0.50, 5.00)},
+    {pos = Vector3.new(392.91, 5.06, -861.09), size = Vector3.new(5.00, 0.50, 5.00)},
+    {pos = Vector3.new(384.07, 10.15, -855.95), size = Vector3.new(5.00, 0.50, 5.00)},
+    {pos = Vector3.new(377.51, 12.94, -855.73), size = Vector3.new(5.00, 0.50, 5.00)},
+    {pos = Vector3.new(370.87, 14.68, -855.83), size = Vector3.new(5.00, 0.50, 5.00)},
+    {pos = Vector3.new(365.12, 16.20, -856.03), size = Vector3.new(5.00, 0.50, 5.00)},
+    {pos = Vector3.new(358.50, 17.61, -855.96), size = Vector3.new(5.00, 0.50, 5.00)},
+    {pos = Vector3.new(351.76, 19.27, -856.05), size = Vector3.new(5.00, 0.50, 5.00)},
+    {pos = Vector3.new(345.37, 20.53, -855.83), size = Vector3.new(5.00, 0.50, 5.00)},
+    {pos = Vector3.new(339.00, 21.54, -855.95), size = Vector3.new(5.00, 0.50, 5.00)},
+    {pos = Vector3.new(334.51, 21.54, -850.11), size = Vector3.new(5.00, 0.50, 5.00)},
+    {pos = Vector3.new(328.83, 21.54, -855.97), size = Vector3.new(5.00, 0.50, 5.00)},
+    {pos = Vector3.new(335.00, 21.54, -861.70), size = Vector3.new(5.00, 0.50, 5.00)},
+    {pos = Vector3.new(324.43, 21.54, -861.35), size = Vector3.new(5.00, 0.50, 5.00)},
+    {pos = Vector3.new(324.69, 21.54, -850.36), size = Vector3.new(5.00, 0.50, 5.00)},
+    {pos = Vector3.new(318.73, 21.54, -855.70), size = Vector3.new(5.00, 0.50, 5.00)},
+    {pos = Vector3.new(313.47, 21.54, -861.90), size = Vector3.new(5.00, 0.50, 5.00)},
+    {pos = Vector3.new(308.27, 21.54, -855.88), size = Vector3.new(5.00, 0.50, 5.00)},
+    {pos = Vector3.new(314.49, 21.54, -850.04), size = Vector3.new(5.00, 0.50, 5.00)},
+    {pos = Vector3.new(303.58, 21.54, -861.59), size = Vector3.new(5.00, 0.50, 5.00)},
+    {pos = Vector3.new(303.61, 21.54, -850.61), size = Vector3.new(5.00, 0.50, 5.00)},
+    {pos = Vector3.new(298.50, 21.54, -856.16), size = Vector3.new(5.00, 0.50, 5.00)},
+    {pos = Vector3.new(393.87, 2.87, -892.93), size = Vector3.new(5.00, 0.50, 5.00)},
+    {pos = Vector3.new(394.65, 2.87, -902.16), size = Vector3.new(5.00, 0.50, 5.00)},
+    {pos = Vector3.new(389.37, 5.04, -892.40), size = Vector3.new(5.00, 0.50, 5.00)},
+    {pos = Vector3.new(389.57, 5.04, -903.24), size = Vector3.new(5.00, 0.50, 5.00)},
+    {pos = Vector3.new(383.37, 7.79, -892.63), size = Vector3.new(5.00, 0.50, 5.00)},
+    {pos = Vector3.new(383.64, 7.79, -903.27), size = Vector3.new(5.00, 0.50, 5.00)},
+    {pos = Vector3.new(378.64, 9.35, -892.48), size = Vector3.new(5.00, 0.50, 5.00)},
+    {pos = Vector3.new(378.64, 9.35, -903.24), size = Vector3.new(5.00, 0.50, 5.00)},
+    {pos = Vector3.new(373.27, 11.53, -892.90), size = Vector3.new(5.00, 0.50, 5.00)},
+    {pos = Vector3.new(372.82, 11.53, -903.33), size = Vector3.new(5.00, 0.50, 5.00)},
+    {pos = Vector3.new(368.47, 11.53, -892.69), size = Vector3.new(5.00, 0.50, 5.00)},
+    {pos = Vector3.new(367.91, 11.53, -903.02), size = Vector3.new(5.00, 0.50, 5.00)},
+    {pos = Vector3.new(362.88, 11.53, -894.04), size = Vector3.new(4.00, 0.50, 7.00)},
+    {pos = Vector3.new(358.03, 11.53, -901.74), size = Vector3.new(4.00, 0.50, 6.00)},
+    {pos = Vector3.new(352.36, 11.53, -894.75), size = Vector3.new(4.00, 0.50, 6.00)},
+    {pos = Vector3.new(347.47, 11.53, -899.21), size = Vector3.new(4.00, 0.50, 6.00)},
+    {pos = Vector3.new(333.21, 11.53, -897.81), size = Vector3.new(5.00, 0.50, 12.00)},
+    {pos = Vector3.new(325.73, 11.53, -898.53), size = Vector3.new(5.00, 0.50, 12.00)},
+    {pos = Vector3.new(318.25, 11.53, -897.79), size = Vector3.new(5.00, 0.50, 11.00)},
+    {pos = Vector3.new(310.71, 11.53, -898.95), size = Vector3.new(5.00, 0.50, 12.00)},
+    {pos = Vector3.new(303.10, 11.53, -898.29), size = Vector3.new(5.00, 0.50, 12.00)},
+    {pos = Vector3.new(295.54, 11.53, -898.01), size = Vector3.new(5.00, 0.50, 12.00)},
+    {pos = Vector3.new(288.21, 11.53, -898.79), size = Vector3.new(5.00, 0.50, 12.00)},
+    {pos = Vector3.new(149.54, 1.04, -856.00), size = Vector3.new(3.00, 0.50, 13.00)},
+    {pos = Vector3.new(148.21, 7.50, -855.93), size = Vector3.new(4.00, 0.50, 13.00)},
+    {pos = Vector3.new(148.27, 13.38, -856.27), size = Vector3.new(4.00, 0.50, 13.00)},
+    {pos = Vector3.new(162.71, 13.70, -859.82), size = Vector3.new(8.00, 0.50, 5.00)},
+    {pos = Vector3.new(170.73, 13.70, -852.89), size = Vector3.new(8.00, 0.50, 5.00)},
+    {pos = Vector3.new(181.41, 13.70, -859.17), size = Vector3.new(8.00, 0.50, 5.00)},
+    {pos = Vector3.new(190.97, 13.70, -853.25), size = Vector3.new(8.00, 0.50, 5.00)},
+    {pos = Vector3.new(217.92, 11.53, -848.28), size = Vector3.new(32.00, 0.50, 4.00)},
+    {pos = Vector3.new(217.99, 12.04, -863.62), size = Vector3.new(29.00, 0.50, 4.00)},
+    {pos = Vector3.new(243.52, 12.04, -855.57), size = Vector3.new(14.00, 0.50, 3.00)},
+    {pos = Vector3.new(150.43, 5.27, -897.87), size = Vector3.new(4.00, 0.50, 16.00)},
+    {pos = Vector3.new(150.71, 13.28, -898.27), size = Vector3.new(4.00, 0.50, 17.00)},
+    {pos = Vector3.new(150.28, 21.29, -898.42), size = Vector3.new(4.00, 0.50, 15.00)},
+    {pos = Vector3.new(150.45, 29.30, -898.11), size = Vector3.new(4.00, 0.50, 16.00)},
+    {pos = Vector3.new(150.52, 37.31, -898.44), size = Vector3.new(4.00, 0.50, 15.00)},
+    {pos = Vector3.new(150.56, 45.32, -897.73), size = Vector3.new(4.00, 0.50, 15.00)},
+    {pos = Vector3.new(150.95, 53.33, -898.02), size = Vector3.new(4.00, 0.50, 16.00)},
+    {pos = Vector3.new(167.23, 53.26, -903.84), size = Vector3.new(5.00, 0.50, 5.00)},
+    {pos = Vector3.new(172.90, 53.26, -900.06), size = Vector3.new(5.00, 0.50, 5.00)},
+    {pos = Vector3.new(167.09, 53.26, -890.73), size = Vector3.new(5.00, 0.50, 5.00)},
+    {pos = Vector3.new(181.65, 53.26, -902.00), size = Vector3.new(5.00, 0.50, 5.00)},
+    {pos = Vector3.new(180.48, 53.26, -893.06), size = Vector3.new(5.00, 0.50, 5.00)},
+    {pos = Vector3.new(199.10, 53.33, -897.28), size = Vector3.new(5.00, 0.50, 5.00)},
+    {pos = Vector3.new(210.50, 53.33, -897.85), size = Vector3.new(5.00, 0.50, 5.00)},
+    {pos = Vector3.new(223.52, 53.33, -898.25), size = Vector3.new(5.00, 0.50, 5.00)},
+    {pos = Vector3.new(235.61, 53.33, -897.82), size = Vector3.new(5.00, 0.50, 5.00)},
+}
+
+local function CreateHitboxes()
+    for _, v in ipairs(hitboxData) do
+        local p = Instance.new("Part")
+        p.Name = "DripRoul_Hitbox"
+        p.Size = v.size
+        p.Position = v.pos
+        p.Anchored = true
+        p.Transparency = 1
+        p.CanCollide = false
+        p.Parent = workspace
+        local box = Instance.new("SelectionBox")
+        box.Adornee = p
+        box.Color3 = Color3.fromRGB(0, 140, 255)
+        box.SurfaceColor3 = Color3.fromRGB(0, 180, 255)
+        box.SurfaceTransparency = 0.55
+        box.LineThickness = 0.07
+        box.Parent = p
+        table.insert(Hitboxes, p)
+    end
+    notificar("Parkour", "Hitboxes ativadas!", Color3.fromRGB(0, 200, 130))
+end
+
+local function ClearHitboxes()
+    for _, v in pairs(Hitboxes) do v:Destroy() end
+    table.clear(Hitboxes)
+end
+
+ParkourBtn.MouseButton1Click:Connect(function()
+    parkourEnabled = not parkourEnabled
+    if parkourEnabled then
+        ParkourBtn.Text = "Auxiliar de Parkour • LIGADO"
+        ParkourBtn.BackgroundColor3 = Color3.fromRGB(0, 140, 255)
+        CreateHitboxes()
+    else
+        ParkourBtn.Text = "Auxiliar de Parkour • DESLIGADO"
+        ParkourBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+        ClearHitboxes()
+        notificar("Parkour", "Hitboxes desativadas.", Color3.fromRGB(255, 100, 100))
+    end
+end)
+
+RunService.Heartbeat:Connect(function()
+    if not parkourEnabled then return end
+    local char = player.Character
+    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+    local velY = hrp.AssemblyLinearVelocity.Y
+    for _, part in pairs(Hitboxes) do
+        part.CanCollide = (velY <= 0.5 and hrp.Position.Y > (part.Position.Y + part.Size.Y / 2 - 1))
+    end
+end)
+
+-- ═══════════════════════════════════════════════════════
+-- ⚔️ ABA JJS
+-- ═══════════════════════════════════════════════════════
+
+local JJsContent = Instance.new("Frame")
+JJsContent.Size = UDim2.new(1, 0, 1, -42)
+JJsContent.Position = UDim2.new(0, 0, 0, 42)
+JJsContent.BackgroundTransparency = 1
+JJsContent.Visible = false
+JJsContent.ZIndex = 3
+JJsContent.Parent = Content
+
+local JJsBtn = Instance.new("TextButton")
+JJsBtn.Size = UDim2.new(0.92, 0, 0, 48)
+JJsBtn.Position = UDim2.new(0.04, 0, 0.08, 0)
+JJsBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+JJsBtn.Text = "JJS AUTOMÁTICO • DESLIGADO"
+JJsBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+JJsBtn.Font = Enum.Font.GothamBold
+JJsBtn.TextSize = 15
+JJsBtn.ZIndex = 3
+JJsBtn.Parent = JJsContent
+Instance.new("UICorner", JJsBtn).CornerRadius = UDim.new(0, 10)
+addHover(JJsBtn, Color3.fromRGB(30, 30, 40), Color3.fromRGB(45, 45, 60))
+
+local tomCarregado = false
+JJsBtn.MouseButton1Click:Connect(function()
+    if tomCarregado then
+        notificar("JJs", "Script já está carregado!", Color3.fromRGB(255, 180, 0))
+        return
+    end
+    JJsBtn.Text = "CARREGANDO..."
+    local ok, err = pcall(function()
+        loadstring(game:HttpGet(TOM_SCRIPT))()
+    end)
+    if ok then
+        tomCarregado = true
+        JJsBtn.Text = "JJS AUTOMÁTICO • LIGADO"
+        JJsBtn.BackgroundColor3 = Color3.fromRGB(0, 140, 255)
+        notificar("JJs", "Auto JJS ativado!", Color3.fromRGB(0, 200, 130))
+    else
+        JJsBtn.Text = "JJS AUTOMÁTICO • DESLIGADO"
+        tomCarregado = false
+        notificar("Erro", "Falha ao carregar: " .. tostring(err), Color3.fromRGB(255, 80, 80))
+    end
+end)
+
+-- ═══════════════════════════════════════════════════════
+-- 🌾 ABA FARM
+-- ═══════════════════════════════════════════════════════
+
+local FarmContent = Instance.new("Frame")
+FarmContent.Size = UDim2.new(1, 0, 1, -42)
+FarmContent.Position = UDim2.new(0, 0, 0, 42)
+FarmContent.BackgroundTransparency = 1
+FarmContent.Visible = false
+FarmContent.ZIndex = 3
+FarmContent.Parent = Content
+
+local Lixos = {
+    Vector3.new(470.87, 3.04, -885.88), Vector3.new(377.87, 3.04, -940.65),
+    Vector3.new(225.02, 3.04, -974.52), Vector3.new(102.27, 3.04, -889.48),
+    Vector3.new(-160.73, 3.04, -803.28), Vector3.new(-389.38, 3.04, -1075.70),
+    Vector3.new(-421.97, 3.04, -970.06),
+}
+local Lixeira = Vector3.new(-394.31, 3.04, -779.87)
+local Foice = Vector3.new(-351.95, 3.12, -631.06)
+local Gramas = {
+    Vector3.new(82.63, 3.00, -671.36), Vector3.new(-45.00, 3.00, -671.39),
+    Vector3.new(-15.39, 3.00, -619.51), Vector3.new(218.96, 3.00, -758.32),
+    Vector3.new(112.01, 3.00, -652.70), Vector3.new(123.73, 3.00, -741.72),
+    Vector3.new(51.76, 3.00, -1001.02), Vector3.new(173.18, 3.00, -987.78),
+    Vector3.new(175.72, 3.00, -931.94), Vector3.new(120.00, 3.00, -848.69),
+    Vector3.new(54.60, 3.00, -780.14), Vector3.new(10.21, 3.00, -744.73),
+}
+local CaixaPega = Vector3.new(77.48, 3.04, -429.99)
+local CaixaEntrega = Vector3.new(440.87, 3.85, -224.70)
+
+local autoLixo, autoGrama, autoCaixa = false, false, false
+
+local function teleportTo(pos)
+    local char = player.Character
+    if char then
+        char:PivotTo(CFrame.new(pos + Vector3.new(0, 3, 0)))
+    end
+end
+
+local function activateNearbyPrompts()
+    local char = player.Character
+    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+    for _, obj in pairs(workspace:GetDescendants()) do
+        if obj:IsA("ProximityPrompt") and obj.Enabled then
+            local parent = obj.Parent
+            if parent and parent:IsA("BasePart") then
+                if (parent.Position - hrp.Position).Magnitude < 18 then
+                    pcall(function() fireproximityprompt(obj) end)
+                end
+            end
+        end
+    end
+end
+
+local function startAutoLixo()
+    task.spawn(function()
+        while autoLixo do
+            for i = 1, #Lixos do
+                if not autoLixo then break end
+                teleportTo(Lixos[i]); task.wait(0.8)
+                activateNearbyPrompts(); task.wait(1.0)
+                teleportTo(Lixeira); task.wait(0.8)
+                activateNearbyPrompts(); task.wait(1.0)
+            end
+        end
+    end)
+end
+
+local function startAutoGrama()
+    task.spawn(function()
+        teleportTo(Foice); task.wait(1.0)
+        activateNearbyPrompts(); task.wait(1.2)
+        while autoGrama do
+            for i = 1, #Gramas do
+                if not autoGrama then break end
+                teleportTo(Gramas[i]); task.wait(0.8)
+                activateNearbyPrompts(); task.wait(1.0)
+            end
+        end
+    end)
+end
+
+local function startAutoCaixa()
+    task.spawn(function()
+        while autoCaixa do
+            teleportTo(CaixaPega); task.wait(0.8)
+            activateNearbyPrompts(); task.wait(1.0)
+            teleportTo(CaixaEntrega); task.wait(0.8)
+            activateNearbyPrompts(); task.wait(1.0)
+            task.wait(28)
+        end
+    end)
+end
+
+local function createFarmBtn(text, y)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(0.92, 0, 0, 46)
+    btn.Position = UDim2.new(0.04, 0, 0, y)
+    btn.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+    btn.Text = text
+    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    btn.Font = Enum.Font.GothamBold
+    btn.TextSize = 14
+    btn.ZIndex = 3
+    btn.Parent = FarmContent
+    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 10)
+    addHover(btn, Color3.fromRGB(30, 30, 40), Color3.fromRGB(45, 45, 60))
+    return btn
+end
+
+local LixoBtn = createFarmBtn("AUTO LIXO • DESLIGADO", 20)
+local GramaBtn = createFarmBtn("AUTO GRAMA • DESLIGADO", 78)
+local CaixaBtn = createFarmBtn("AUTO CAIXA • DESLIGADO", 136)
+
+LixoBtn.MouseButton1Click:Connect(function()
+    autoLixo = not autoLixo
+    LixoBtn.Text = autoLixo and "AUTO LIXO • LIGADO" or "AUTO LIXO • DESLIGADO"
+    LixoBtn.BackgroundColor3 = autoLixo and Color3.fromRGB(0, 140, 255) or Color3.fromRGB(30, 30, 40)
+    if autoLixo then startAutoLixo() end
+end)
+GramaBtn.MouseButton1Click:Connect(function()
+    autoGrama = not autoGrama
+    GramaBtn.Text = autoGrama and "AUTO GRAMA • LIGADO" or "AUTO GRAMA • DESLIGADO"
+    GramaBtn.BackgroundColor3 = autoGrama and Color3.fromRGB(0, 140, 255) or Color3.fromRGB(30, 30, 40)
+    if autoGrama then startAutoGrama() end
+end)
+CaixaBtn.MouseButton1Click:Connect(function()
+    autoCaixa = not autoCaixa
+    CaixaBtn.Text = autoCaixa and "AUTO CAIXA • LIGADO" or "AUTO CAIXA • DESLIGADO"
+    CaixaBtn.BackgroundColor3 = autoCaixa and Color3.fromRGB(0, 140, 255) or Color3.fromRGB(30, 30, 40)
+    if autoCaixa then startAutoCaixa() end
+end)
+
+-- ═══════════════════════════════════════════════════════
+-- 🔄 ABA VOLVERS
+-- ═══════════════════════════════════════════════════════
+
+local VolversContent = Instance.new("Frame")
+VolversContent.Size = UDim2.new(1, 0, 1, -42)
+VolversContent.Position = UDim2.new(0, 0, 0, 42)
+VolversContent.BackgroundTransparency = 1
+VolversContent.Visible = false
+VolversContent.ZIndex = 3
+VolversContent.Parent = Content
+
+local AbrirVolversBtn = Instance.new("TextButton")
+AbrirVolversBtn.Size = UDim2.new(0.92, 0, 0, 56)
+AbrirVolversBtn.Position = UDim2.new(0.04, 0, 0.12, 0)
+AbrirVolversBtn.BackgroundColor3 = Color3.fromRGB(0, 140, 255)
+AbrirVolversBtn.Text = "ABRIR VOLVERS DO MENU"
+AbrirVolversBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+AbrirVolversBtn.Font = Enum.Font.GothamBold
+AbrirVolversBtn.TextSize = 16
+AbrirVolversBtn.ZIndex = 3
+AbrirVolversBtn.Parent = VolversContent
+Instance.new("UICorner", AbrirVolversBtn).CornerRadius = UDim.new(0, 10)
+addHover(AbrirVolversBtn, Color3.fromRGB(0, 140, 255), Color3.fromRGB(0, 180, 255))
+
+local VolversMenu = Instance.new("Frame")
+VolversMenu.Size = UDim2.new(0, 280, 0, 240)
+VolversMenu.Position = UDim2.new(0.5, -140, 0.5, -120)
+VolversMenu.BackgroundColor3 = Color3.fromRGB(14, 14, 18)
+VolversMenu.Visible = false
+VolversMenu.Parent = ScreenGui
+Instance.new("UICorner", VolversMenu).CornerRadius = UDim.new(0, 12)
+addStroke(VolversMenu, Color3.fromRGB(0, 140, 255), 1.4, 0.35)
+
+local VolversTitle = Instance.new("TextLabel")
+VolversTitle.Size = UDim2.new(1, 0, 0, 40)
+VolversTitle.BackgroundTransparency = 1
+VolversTitle.Text = "🔄 VOLVERS"
+VolversTitle.TextColor3 = Color3.fromRGB(0, 180, 255)
+VolversTitle.Font = Enum.Font.GothamBold
+VolversTitle.TextSize = 20
+VolversTitle.Parent = VolversMenu
+
+local VolversClose = Instance.new("TextButton")
+VolversClose.Size = UDim2.new(0, 30, 0, 30)
+VolversClose.Position = UDim2.new(1, -38, 0, 6)
+VolversClose.BackgroundColor3 = Color3.fromRGB(180, 30, 40)
+VolversClose.Text = "X"
+VolversClose.TextColor3 = Color3.fromRGB(255, 255, 255)
+VolversClose.Font = Enum.Font.GothamBold
+VolversClose.TextSize = 14
+VolversClose.Parent = VolversMenu
+Instance.new("UICorner", VolversClose).CornerRadius = UDim.new(0, 7)
+VolversClose.MouseButton1Click:Connect(function() VolversMenu.Visible = false end)
+
+local function createBtnVolvers(text, pos)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(0.44, 0, 0, 68)
+    btn.Position = pos
+    btn.BackgroundColor3 = Color3.fromRGB(28, 28, 38)
+    btn.Text = text
+    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    btn.Font = Enum.Font.GothamBold
+    btn.TextSize = 14
+    btn.Parent = VolversMenu
+    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 9)
+    addHover(btn, Color3.fromRGB(28, 28, 38), Color3.fromRGB(45, 45, 60))
+    return btn
+end
+
+local BtnRetaguarda = createBtnVolvers("Retaguarda", UDim2.new(0.04, 0, 0.22, 0))
+local BtnVoltaguarda = createBtnVolvers("Voltaguarda", UDim2.new(0.52, 0, 0.22, 0))
+local BtnDireita = createBtnVolvers("Direita", UDim2.new(0.04, 0, 0.58, 0))
+local BtnEsquerda = createBtnVolvers("Esquerda", UDim2.new(0.52, 0, 0.58, 0))
+makeDraggable(VolversMenu)
+
+local savedRotation = nil
+
+local function savePosition()
+    local char = player.Character
+    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+    if hrp then savedRotation = hrp.CFrame.LookVector end
+end
+
+local function turnCharacter(degrees)
+    local char = player.Character
+    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+    if hrp then hrp.CFrame = hrp.CFrame * CFrame.Angles(0, math.rad(degrees), 0) end
+end
+
+BtnRetaguarda.MouseButton1Click:Connect(function()
+    if not savedRotation then savePosition() end
+    turnCharacter(180)
+end)
+BtnVoltaguarda.MouseButton1Click:Connect(function()
+    local char = player.Character
+    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+    if hrp and savedRotation then
+        hrp.CFrame = CFrame.new(hrp.Position, hrp.Position + savedRotation)
+    end
+end)
+BtnDireita.MouseButton1Click:Connect(function() turnCharacter(-90) end)
+BtnEsquerda.MouseButton1Click:Connect(function() turnCharacter(90) end)
+AbrirVolversBtn.MouseButton1Click:Connect(function() VolversMenu.Visible = true end)
+
+if player.Character then savePosition() end
+player.CharacterAdded:Connect(function()
+    task.wait(1)
+    savePosition()
+    if parkourEnabled then ClearHitboxes(); CreateHitboxes() end
+end)
+
+-- ═══════════════════════════════════════════════════════
+-- ⭐ ABA EXTRAS
+-- ═══════════════════════════════════════════════════════
+
+local ExtrasContent = Instance.new("Frame")
+ExtrasContent.Size = UDim2.new(1, 0, 1, -42)
+ExtrasContent.Position = UDim2.new(0, 0, 0, 42)
+ExtrasContent.BackgroundTransparency = 1
+ExtrasContent.Visible = false
+ExtrasContent.ZIndex = 3
+ExtrasContent.Parent = Content
+
+local noclipAtivo = false
+local speedAtivo = false
+local jumpAtivo = false
+local posSalva = nil
+
+local function createExtraBtn(text, y, corAtiva)
+    corAtiva = corAtiva or Color3.fromRGB(0, 140, 255)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(0.92, 0, 0, 40)
+    btn.Position = UDim2.new(0.04, 0, 0, y)
+    btn.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+    btn.Text = text
+    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    btn.Font = Enum.Font.GothamBold
+    btn.TextSize = 13
+    btn.ZIndex = 3
+    btn.Parent = ExtrasContent
+    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 9)
+    addHover(btn, Color3.fromRGB(30, 30, 40), Color3.fromRGB(45, 45, 60))
+    return btn
+end
+
+local NoclipBtn = createExtraBtn("👻 NOCLIP • DESLIGADO", 10)
+NoclipBtn.MouseButton1Click:Connect(function()
+    noclipAtivo = not noclipAtivo
+    NoclipBtn.Text = noclipAtivo and "👻 NOCLIP • LIGADO" or "👻 NOCLIP • DESLIGADO"
+    NoclipBtn.BackgroundColor3 = noclipAtivo and Color3.fromRGB(0, 140, 255) or Color3.fromRGB(30, 30, 40)
+    notificar("Noclip", noclipAtivo and "Ativado" or "Desativado", Color3.fromRGB(0, 200, 130))
+end)
+
+task.spawn(function()
+    RunService.Stepped:Connect(function()
+        if not noclipAtivo then return end
+        local char = player.Character
+        if not char then return end
+        for _, part in pairs(char:GetDescendants()) do
+            if part:IsA("BasePart") and part.CanCollide then
+                part.CanCollide = false
+            end
+        end
+    end)
+end)
+
+local SpeedBtn = createExtraBtn("⚡ SPEED BOOST • DESLIGADO", 58)
+SpeedBtn.MouseButton1Click:Connect(function()
+    speedAtivo = not speedAtivo
+    SpeedBtn.Text = speedAtivo and "⚡ SPEED BOOST • LIGADO" or "⚡ SPEED BOOST • DESLIGADO"
+    SpeedBtn.BackgroundColor3 = speedAtivo and Color3.fromRGB(0, 140, 255) or Color3.fromRGB(30, 30, 40)
+    local hum = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+    if hum then hum.WalkSpeed = speedAtivo and 50 or 16 end
+end)
+
+local JumpBtn = createExtraBtn("🦘 SUPER JUMP • DESLIGADO", 106)
+JumpBtn.MouseButton1Click:Connect(function()
+    jumpAtivo = not jumpAtivo
+    JumpBtn.Text = jumpAtivo and "🦘 SUPER JUMP • LIGADO" or "🦘 SUPER JUMP • DESLIGADO"
+    JumpBtn.BackgroundColor3 = jumpAtivo and Color3.fromRGB(0, 140, 255) or Color3.fromRGB(30, 30, 40)
+    local hum = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+    if hum then hum.JumpPower = jumpAtivo and 100 or 50 end
+end)
+
+local SalvarPosBtn = createExtraBtn("💾 SALVAR POSIÇÃO", 154)
+local VoltarPosBtn = createExtraBtn("🔙 VOLTAR À POSIÇÃO", 202)
+
+SalvarPosBtn.MouseButton1Click:Connect(function()
+    local hrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+    if hrp then
+        posSalva = hrp.CFrame
+        notificar("Posição", "Salva com sucesso!", Color3.fromRGB(0, 200, 130))
+    end
+end)
+
+VoltarPosBtn.MouseButton1Click:Connect(function()
+    if posSalva and player.Character then
+        player.Character:PivotTo(posSalva)
+        notificar("Posição", "Teleportado!", Color3.fromRGB(0, 200, 130))
+    else
+        notificar("Erro", "Nenhuma posição salva.", Color3.fromRGB(255, 100, 100))
+    end
+end)
+
+local ServerHopBtn = createExtraBtn("🌐 SERVER HOP", 250)
+ServerHopBtn.MouseButton1Click:Connect(function()
+    notificar("Server Hop", "Procurando servidor...", Color3.fromRGB(0, 180, 255))
+    task.spawn(function()
+        pcall(function()
+            local servers = HttpService:JSONDecode(game:HttpGet("https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?sortOrder=Asc&limit=100"))
+            local escolhido = nil
+            for _, s in pairs(servers.data) do
+                if s.playing < s.maxPlayers and s.id ~= game.JobId then
+                    escolhido = s.id
+                    break
+                end
+            end
+            if escolhido then
+                TeleportService:TeleportToPlaceInstance(game.PlaceId, escolhido, player)
+            else
+                notificar("Erro", "Nenhum servidor disponível.", Color3.fromRGB(255, 100, 100))
+            end
+        end)
+    end)
+end)
+
+local MonitorLbl = Instance.new("TextLabel")
+MonitorLbl.Size = UDim2.new(0.92, 0, 0, 30)
+MonitorLbl.Position = UDim2.new(0.04, 0, 0, 298)
+MonitorLbl.BackgroundColor3 = Color3.fromRGB(20, 20, 28)
+MonitorLbl.Text = "FPS: -- | Ping: --"
+MonitorLbl.TextColor3 = Color3.fromRGB(0, 200, 255)
+MonitorLbl.Font = Enum.Font.GothamBold
+MonitorLbl.TextSize = 13
+MonitorLbl.ZIndex = 3
+MonitorLbl.Parent = ExtrasContent
+Instance.new("UICorner", MonitorLbl).CornerRadius = UDim.new(0, 8)
+
+task.spawn(function()
+    local frames = 0
+    local tempo = tick()
+    RunService.RenderStepped:Connect(function()
+        frames = frames + 1
+        if tick() - tempo >= 1 then
+            local fps = frames
+            local ping = math.floor(player:GetNetworkPing() * 1000)
+            MonitorLbl.Text = string.format("FPS: %d | Ping: %dms", fps, ping)
+            frames = 0
+            tempo = tick()
+        end
+    end)
+end)
+
+-- ═══════════════════════════════════════════════════════
+-- 💬 ABA OUTROS
+-- ═══════════════════════════════════════════════════════
+
+local OutrosContent = Instance.new("Frame")
+OutrosContent.Size = UDim2.new(1, 0, 1, -42)
+OutrosContent.Position = UDim2.new(0, 0, 0, 42)
+OutrosContent.BackgroundTransparency = 1
+OutrosContent.Visible = false
+OutrosContent.ZIndex = 3
+OutrosContent.Parent = Content
+
+local ChatBtn = Instance.new("TextButton")
+ChatBtn.Size = UDim2.new(0.92, 0, 0, 48)
+ChatBtn.Position = UDim2.new(0.04, 0, 0.08, 0)
+ChatBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+ChatBtn.Text = "LIBERAR CHAT"
+ChatBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+ChatBtn.Font = Enum.Font.GothamBold
+ChatBtn.TextSize = 15
+ChatBtn.ZIndex = 3
+ChatBtn.Parent = OutrosContent
+Instance.new("UICorner", ChatBtn).CornerRadius = UDim.new(0, 10)
+addHover(ChatBtn, Color3.fromRGB(30, 30, 40), Color3.fromRGB(45, 45, 60))
+
+ChatBtn.MouseButton1Click:Connect(function()
+    pcall(function() StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.Chat, true) end)
+    pcall(function() StarterGui:SetCore("ChatActive", true) end)
+    pcall(function()
+        if TextChatService then
+            TextChatService.ChatWindowConfiguration.Enabled = true
+            TextChatService.ChatInputBarConfiguration.Enabled = true
+        end
+    end)
+    pcall(function()
+        local chatFrame = playerGui:FindFirstChild("Chat")
+        if chatFrame then chatFrame.Enabled = true end
+    end)
+    ChatBtn.Text = "CHAT LIBERADO ✓"
+    ChatBtn.BackgroundColor3 = Color3.fromRGB(0, 140, 255)
+    notificar("Chat", "Chat liberado com sucesso!", Color3.fromRGB(0, 200, 130))
+    task.wait(1.5)
+    ChatBtn.Text = "LIBERAR CHAT"
+    ChatBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+end)
+
+-- ═══════════════════════════════════════════════════════
+-- 🤖 ABA IA
+-- ═══════════════════════════════════════════════════════
+
+local IAContent = Instance.new("Frame")
+IAContent.Size = UDim2.new(1, 0, 1, -42)
+IAContent.Position = UDim2.new(0, 0, 0, 42)
+IAContent.BackgroundTransparency = 1
+IAContent.Visible = false
+IAContent.ZIndex = 3
+IAContent.Parent = Content
+
+local ChatScroll = Instance.new("ScrollingFrame")
+ChatScroll.Size = UDim2.new(1, -8, 0, 230)
+ChatScroll.Position = UDim2.new(0, 4, 0, 4)
+ChatScroll.BackgroundColor3 = Color3.fromRGB(20, 20, 28)
+ChatScroll.BackgroundTransparency = 0.3
+ChatScroll.ScrollBarThickness = 4
+ChatScroll.BorderSizePixel = 0
+ChatScroll.ZIndex = 3
+ChatScroll.Parent = IAContent
+Instance.new("UICorner", ChatScroll).CornerRadius = UDim.new(0, 8)
+
+local ChatList = Instance.new("UIListLayout")
+ChatList.Padding = UDim.new(0, 8)
+ChatList.Parent = ChatScroll
+ChatList.SortOrder = Enum.SortOrder.LayoutOrder
+
+local function addMessage(text, isAI)
+    local msg = Instance.new("TextLabel")
+    msg.Size = UDim2.new(1, -12, 0, 0)
+    msg.BackgroundTransparency = 1
+    msg.Text = (isAI and "🤖 IA: " or "Você: ") .. text
+    msg.TextColor3 = isAI and Color3.fromRGB(0, 200, 255) or Color3.fromRGB(230, 230, 240)
+    msg.Font = Enum.Font.Gotham
+    msg.TextSize = 13
+    msg.TextWrapped = true
+    msg.TextXAlignment = Enum.TextXAlignment.Left
+    msg.ZIndex = 4
+    msg.Parent = ChatScroll
+    local size = TextService:GetTextSize(msg.Text, 13, Enum.Font.Gotham, Vector2.new(ChatScroll.AbsoluteSize.X - 20, 2000))
+    msg.Size = UDim2.new(1, -12, 0, size.Y + 8)
+    ChatScroll.CanvasSize = UDim2.new(0, 0, 0, ChatList.AbsoluteContentSize.Y + 15)
+    ChatScroll.CanvasPosition = Vector2.new(0, math.max(0, ChatScroll.CanvasSize.Y.Offset - ChatScroll.AbsoluteSize.Y))
+end
+
+local function addGeneratedText(text)
+    local c = Instance.new("Frame")
+    c.Size = UDim2.new(1, -12, 0, 0)
+    c.BackgroundColor3 = Color3.fromRGB(24, 28, 38)
+    c.BackgroundTransparency = 0.3
+    c.ZIndex = 4
+    c.Parent = ChatScroll
+    Instance.new("UICorner", c).CornerRadius = UDim.new(0, 8)
+    local lbl = Instance.new("TextLabel")
+    lbl.Size = UDim2.new(1, -16, 0, 0)
+    lbl.Position = UDim2.new(0, 8, 0, 8)
+    lbl.BackgroundTransparency = 1
+    lbl.Text = text
+    lbl.TextColor3 = Color3.fromRGB(230, 230, 240)
+    lbl.Font = Enum.Font.Gotham
+    lbl.TextSize = 13
+    lbl.TextWrapped = true
+    lbl.TextXAlignment = Enum.TextXAlignment.Left
+    lbl.TextYAlignment = Enum.TextYAlignment.Top
+    lbl.ZIndex = 5
+    lbl.Parent = c
+    local size = TextService:GetTextSize(text, 13, Enum.Font.Gotham, Vector2.new(ChatScroll.AbsoluteSize.X - 40, 2000))
+    lbl.Size = UDim2.new(1, -16, 0, size.Y + 4)
+    local copy = Instance.new("TextButton")
+    copy.Size = UDim2.new(0, 90, 0, 28)
+    copy.Position = UDim2.new(1, -100, 0, size.Y + 16)
+    copy.BackgroundColor3 = Color3.fromRGB(0, 140, 255)
+    copy.Text = "Copiar"
+    copy.TextColor3 = Color3.fromRGB(255, 255, 255)
+    copy.Font = Enum.Font.GothamBold
+    copy.TextSize = 13
+    copy.ZIndex = 5
+    copy.Parent = c
+    Instance.new("UICorner", copy).CornerRadius = UDim.new(0, 6)
+    copy.MouseButton1Click:Connect(function()
+        if setclipboard then
+            setclipboard(text)
+            copy.Text = "Copiado ✓"
+            notificar("IA", "Texto copiado!", Color3.fromRGB(0, 200, 130))
+            task.wait(1.2)
+            copy.Text = "Copiar"
+        end
+    end)
+    c.Size = UDim2.new(1, -12, 0, size.Y + 52)
+    ChatScroll.CanvasSize = UDim2.new(0, 0, 0, ChatList.AbsoluteContentSize.Y + 15)
+    ChatScroll.CanvasPosition = Vector2.new(0, math.max(0, ChatScroll.CanvasSize.Y.Offset - ChatScroll.AbsoluteSize.Y))
+end
+
+task.defer(function()
+    addMessage("Fala! Digite o que quer que eu gere.", true)
+end)
+
+local InputBox = Instance.new("TextBox")
+InputBox.Size = UDim2.new(0.72, 0, 0, 36)
+InputBox.Position = UDim2.new(0.02, 0, 1, -50)
+InputBox.BackgroundColor3 = Color3.fromRGB(28, 28, 38)
+InputBox.PlaceholderText = "Digite o que quer gerar..."
+InputBox.PlaceholderColor3 = Color3.fromRGB(100, 100, 120)
+InputBox.Text = ""
+InputBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+InputBox.Font = Enum.Font.Gotham
+InputBox.TextSize = 13
+InputBox.ClearTextOnFocus = false
+InputBox.ZIndex = 3
+InputBox.Parent = IAContent
+Instance.new("UICorner", InputBox).CornerRadius = UDim.new(0, 8)
+
+local SendBtn = Instance.new("TextButton")
+SendBtn.Size = UDim2.new(0.22, 0, 0, 36)
+SendBtn.Position = UDim2.new(0.76, 0, 1, -50)
+SendBtn.BackgroundColor3 = Color3.fromRGB(0, 140, 255)
+SendBtn.Text = "Gerar"
+SendBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+SendBtn.Font = Enum.Font.GothamBold
+SendBtn.TextSize = 13
+SendBtn.ZIndex = 3
+SendBtn.Parent = IAContent
+Instance.new("UICorner", SendBtn).CornerRadius = UDim.new(0, 8)
+addHover(SendBtn, Color3.fromRGB(0, 140, 255), Color3.fromRGB(0, 180, 255))
+
+local function detectLines(r)
+    local l = string.lower(r)
+    if string.find(l, "1 linha") or string.find(l, "uma linha") then return 1 end
+    if string.find(l, "2 linha") or string.find(l, "duas linha") or string.find(l, "menor") then return 2 end
+    if string.find(l, "3 linha") or string.find(l, "três linha") or string.find(l, "tres linha") then return 3 end
+    return 4
+end
+
+local function generateText(request)
+    local lines = detectLines(request)
+    local lower = string.lower(request)
+    local subject = "valores militares"
+
+    if string.find(lower, "cgm") then subject = "CGM"
+    elseif string.find(lower, "general") or string.find(lower, "jinerais") then subject = "os Generais"
+    elseif string.find(lower, "disciplina") then subject = "uma disciplina"
+    elseif string.find(lower, "hierarquia") then subject = "a alta"
+    elseif string.find(lower, "patente") or string.find(lower, "promoção") then subject = "uma patente"
+    elseif string.find(lower, "anúncio") or string.find(lower, "anuncio") then subject = "anúncio"
+    elseif string.find(lower, "aviso") then subject = "aviso"
+    end
+
+    local texts = {
+        ["CGM"] = {
+            [1] = "A CGM é fundamental para a cooperação e o controle das operações.",
+            [2] = "A CGM garante a organização e a eficiência das tropas.\nSua importância está na liderança e no planejamento.",
+            [3] = "A CGM é essencial para a cooperação militar.\nGarante disciplina, ordem e eficiência.\nSem ela as operações perdem direção.",
+            [4] = "A CGM é fundamental para a cooperação e o controle das operações.\nEla garante organização, disciplina e eficiência das tropas.\nSua liderança orienta todas as ações no campo.\nSem a CGM a estrutura militar fica comprometida."
+        },
+        ["os Generais"] = {
+            [1] = "Os Generais são a base da liderança e da estratégia militar.",
+            [2] = "Os Generais orientam as tropas com sabedoria e experiência.\nSua presença garante disciplina e eficiência.",
+            [3] = "Os Generais são a base da liderança militar.\nOrientam as tropas com sabedoria.\nGarantem disciplina e sucesso nas missões.",
+            [4] = "Os Generais são a base da liderança e da estratégia militar.\nEles orientam as tropas com sabedoria e experiência.\nSua presença garante disciplina e eficiência nas operações.\nSem eles a posição e o sucesso ficam comprometidos."
+        },
+        ["uma disciplina"] = {
+            [1] = "A disciplina é o pilar fundamental de qualquer força militar.",
+            [2] = "A disciplina molda o caráter e a responsabilidade.\nSem ela não há ordem nem vitória.",
+            [3] = "A disciplina é o pilar de qualquer força militar.\nMolda o caráter e o respeito.\nSem disciplina não há ordem nem vitória.",
+            [4] = "A disciplina é o pilar fundamental de qualquer força militar.\nEla molda o caráter, a responsabilidade e o respeito.\nSem disciplina não há ordem, e sem ordem não há vitória.\nÉ o que diferencia um soldado de um civil."
+        },
+        ["uma patente"] = {
+            [1] = "A patente representa o reconhecimento do mérito e da dedicação.",
+            [2] = "A patente é conquistada com esforço e lealdade.\nEla traz maior responsabilidade.",
+            [3] = "A patente reconhece o mérito e a dedicação.\nÉ conquistada com esforço e disciplina.\nQuem a recebe deve servir de exemplo.",
+            [4] = "A patente representa o reconhecimento do mérito e da dedicação.\nCada promoção é conquistada com esforço e liderança.\nEla não é apenas um título, mas uma responsabilidade maior.\nQuem a recebe deve servir de exemplo aos demais."
+        },
+        ["anúncio"] = {
+            [1] = "📢 ATENÇÃO: Todos devem se apresentar no QG imediatamente.",
+            [2] = "📢 ATENÇÃO TODOS!\nApresentem-se no QG em até 10 minutos. Atrasos serão punidos.",
+            [3] = "📢 ATENÇÃO TODOS OS MEMBROS!\nApresentem-se no QG em até 10 minutos.\nAtrasos serão punidos. Disciplina acima de tudo.",
+            [4] = "📢 ATENÇÃO TODOS OS MEMBROS!\nApresentem-se no QG em até 10 minutos para formação.\nAtrasos serão punidos.\nDisciplina e respeito acima de tudo."
+        },
+        ["aviso"] = {
+            [1] = "⚠️ Mantenham o respeito no chat e nas chamadas.",
+            [2] = "⚠️ AVISO: Mantenham o respeito no chat e nas chamadas.\nAs ofensas serão punidas.",
+            [3] = "⚠️ AVISO IMPORTANTE\nMantenham o respeito no chat e nas chamadas.\nOfensas serão punidas sem aviso prévio.",
+            [4] = "⚠️ AVISO IMPORTANTE\nTodos devem manter o respeito no chat e nas chamadas.\nAs ofensas serão punidas sem aviso prévio.\nComando."
+        }
+    }
+
+    if texts[subject] then return texts[subject][lines] end
+
+    local generics = {
+        [1] = subject:gsub("^%l", string.upper) .. " é fundamental para o bom funcionamento da instituição.",
+        [2] = subject:gsub("^%l", string.upper) .. " tem grande importância na estrutura militar.\nGarantir ordem, disciplina e eficiência.",
+        [3] = subject:gsub("^%l", string.upper) .. " é essencial para o sucesso das operações.\nGarante organização e respeito à posição.\nSua presença fortalece a instituição.",
+        [4] = subject:gsub("^%l", string.upper) .. " é fundamental para o bom funcionamento da instituição.\nGarantir ordem, disciplina e eficiência nas operações.\nSua importância está na liderança e no exemplo.\nSem ele a estrutura militar fica enfraquecida."
+    }
+    return generics[lines]
+end
+
+local function sendMessage()
+    local text = InputBox.Text
+    if text == "" or text:gsub("%s+", "") == "" then return end
+    addMessage(text, false)
+    InputBox.Text = ""
+    task.wait(0.4)
+    addGeneratedText(generateText(text))
+end
+
+SendBtn.MouseButton1Click:Connect(sendMessage)
+InputBox.FocusLost:Connect(function(enter) if enter then sendMessage() end end)
+
+-- ═══════════════════════════════════════════════════════
+-- 👑 ABA CRÉDITOS
+-- ═══════════════════════════════════════════════════════
+
+local CreditosContent = Instance.new("Frame")
+CreditosContent.Size = UDim2.new(1, 0, 1, -42)
+CreditosContent.Position = UDim2.new(0, 0, 0, 42)
+CreditosContent.BackgroundTransparency = 1
+CreditosContent.Visible = false
+CreditosContent.ZIndex = 3
+CreditosContent.Parent = Content
+
+local CreditosTitle = Instance.new("TextLabel")
+CreditosTitle.Size = UDim2.new(1, 0, 0, 40)
+CreditosTitle.Position = UDim2.new(0, 0, 0.10, 0)
+CreditosTitle.BackgroundTransparency = 1
+CreditosTitle.Text = "👑 DripRoul"
+CreditosTitle.TextColor3 = Color3.fromRGB(0, 180, 255)
+CreditosTitle.Font = Enum.Font.GothamBold
+CreditosTitle.TextSize = 32
+CreditosTitle.ZIndex = 3
+CreditosTitle.Parent = CreditosContent
+
+local CreditosSub = Instance.new("TextLabel")
+CreditosSub.Size = UDim2.new(1, 0, 0, 30)
+CreditosSub.Position = UDim2.new(0, 0, 0.22, 0)
+CreditosSub.BackgroundTransparency = 1
+CreditosSub.Text = "Criador Oficial: PedroCarvalhosouz"
+CreditosSub.TextColor3 = Color3.fromRGB(255, 215, 0)
+CreditosSub.Font = Enum.Font.GothamBold
+CreditosSub.TextSize = 16
+CreditosSub.ZIndex = 3
+CreditosSub.Parent = CreditosContent
+
+local CreditosVersao = Instance.new("TextLabel")
+CreditosVersao.Size = UDim2.new(1, 0, 0, 20)
+CreditosVersao.Position = UDim2.new(0, 0, 0.33, 0)
+CreditosVersao.BackgroundTransparency = 1
+CreditosVersao.Text = "Versão 2.0 • Atualizado"
+CreditosVersao.TextColor3 = Color3.fromRGB(140, 140, 160)
+CreditosVersao.Font = Enum.Font.Gotham
+CreditosVersao.TextSize = 13
+CreditosVersao.ZIndex = 3
+CreditosVersao.Parent = CreditosContent
+
+local DiscordBtn = Instance.new("TextButton")
+DiscordBtn.Size = UDim2.new(0.7, 0, 0, 56)
+DiscordBtn.Position = UDim2.new(0.15, 0, 0.50, 0)
+DiscordBtn.BackgroundColor3 = Color3.fromRGB(88, 101, 242)
+DiscordBtn.Text = "📢 ENTRAR NO DISCORD"
+DiscordBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+DiscordBtn.Font = Enum.Font.GothamBold
+DiscordBtn.TextSize = 16
+DiscordBtn.ZIndex = 3
+DiscordBtn.Parent = CreditosContent
+Instance.new("UICorner", DiscordBtn).CornerRadius = UDim.new(0, 10)
+
+DiscordBtn.MouseButton1Click:Connect(function()
+    if setclipboard then
+        setclipboard(LINK_DO_DISCORD)
+        DiscordBtn.Text = "✅ COPIADO!"
+        notificar("Discord", "Link copiado! Cole no navegador.", Color3.fromRGB(88, 101, 242))
+        task.wait(1.5)
+        DiscordBtn.Text = "📢 ENTRAR NO DISCORD"
+    end
+end)
+
+-- ═══════════════════════════════════════════════════════
+-- 🔀 NAVEGAÇÃO
+-- ═══════════════════════════════════════════════════════
+
+local function showTab(name)
+    PatentesScroll.Visible = name == "Patentes"
+    PerguntasScroll.Visible = name == "Perguntas"
+    ParkourContent.Visible = name == "Parkour"
+    JJsContent.Visible = name == "JJs"
+    FarmContent.Visible = name == "Farm"
+    VolversContent.Visible = name == "VOLVERS"
+    OutrosContent.Visible = name == "Outros"
+    ExtrasContent.Visible = name == "EXTRAS"
+    IAContent.Visible = name == "IA"
+    CreditosContent.Visible = name == "CRÉDITOS"
+    ContentTitle.Text = name
+
+    for _, tab in ipairs(abas) do
+        local isActive = string.find(tab.Text, name) ~= nil
+        tab.BackgroundColor3 = isActive and Color3.fromRGB(0, 140, 255) or Color3.fromRGB(28, 28, 38)
+        tab.TextColor3 = isActive and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(180, 180, 200)
+    end
+end
+
+TabPatentes.MouseButton1Click:Connect(function() showTab("Patentes") end)
+TabPerguntas.MouseButton1Click:Connect(function() showTab("Perguntas") end)
+TabParkour.MouseButton1Click:Connect(function() showTab("Parkour") end)
+TabJJs.MouseButton1Click:Connect(function() showTab("JJs") end)
+TabFarm.MouseButton1Click:Connect(function() showTab("Farm") end)
+TabVolvers.MouseButton1Click:Connect(function() showTab("VOLVERS") end)
+TabOutros.MouseButton1Click:Connect(function() showTab("Outros") end)
+TabExtras.MouseButton1Click:Connect(function() showTab("EXTRAS") end)
+TabIA.MouseButton1Click:Connect(function() showTab("IA") end)
+TabCreditos.MouseButton1Click:Connect(function() showTab("CRÉDITOS") end)
+
+makeDraggable(MainFrame)
+
+-- ═══════════════════════════════════════════════════════
+-- ⚠️ CONFIRMAÇÃO DE FECHAR
+-- ═══════════════════════════════════════════════════════
+
+local ConfirmFrame = Instance.new("Frame")
+ConfirmFrame.Size = UDim2.new(0, 300, 0, 150)
+ConfirmFrame.Position = UDim2.new(0.5, -150, 0.5, -75)
+ConfirmFrame.BackgroundColor3 = Color3.fromRGB(16, 16, 22)
+ConfirmFrame.Visible = false
+ConfirmFrame.ZIndex = 20
+ConfirmFrame.Parent = ScreenGui
+Instance.new("UICorner", ConfirmFrame).CornerRadius = UDim.new(0, 12)
+addStroke(ConfirmFrame, Color3.fromRGB(0, 140, 255), 1.5, 0.3)
+
+local ConfirmTitle = Instance.new("TextLabel")
+ConfirmTitle.Size = UDim2.new(1, -20, 0, 60)
+ConfirmTitle.Position = UDim2.new(0, 10, 0, 20)
+ConfirmTitle.BackgroundTransparency = 1
+ConfirmTitle.Text = "DESEJA MESMO\nFECHAR O MENU?"
+ConfirmTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+ConfirmTitle.Font = Enum.Font.GothamBold
+ConfirmTitle.TextSize = 16
+ConfirmTitle.TextWrapped = true
+ConfirmTitle.ZIndex = 21
+ConfirmTitle.Parent = ConfirmFrame
+
+local SimBtn = Instance.new("TextButton")
+SimBtn.Size = UDim2.new(0, 100, 0, 34)
+SimBtn.Position = UDim2.new(0.08, 0, 0.68, 0)
+SimBtn.BackgroundColor3 = Color3.fromRGB(0, 140, 255)
+SimBtn.Text = "SIM"
+SimBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+SimBtn.Font = Enum.Font.GothamBold
+SimBtn.TextSize = 14
+SimBtn.ZIndex = 21
+SimBtn.Parent = ConfirmFrame
+Instance.new("UICorner", SimBtn).CornerRadius = UDim.new(0, 8)
+
+local NaoBtn = Instance.new("TextButton")
+NaoBtn.Size = UDim2.new(0, 100, 0, 34)
+NaoBtn.Position = UDim2.new(0.55, 0, 0.68, 0)
+NaoBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
+NaoBtn.Text = "NÃO"
+NaoBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+NaoBtn.Font = Enum.Font.GothamBold
+NaoBtn.TextSize = 14
+NaoBtn.ZIndex = 21
+NaoBtn.Parent = ConfirmFrame
+Instance.new("UICorner", NaoBtn).CornerRadius = UDim.new(0, 8)
+
+local function closeAll()
+    parkourEnabled = false
+    ClearHitboxes()
+    autoLixo = false; autoGrama = false; autoCaixa = false
+    noclipAtivo = false; speedAtivo = false; jumpAtivo = false
+    MainFrame.Visible = false
+    Ball.Visible = false
+    ConfirmFrame.Visible = false
+    VolversMenu.Visible = false
+    setBlur(0)
+end
+
+CloseX.MouseButton1Click:Connect(function() ConfirmFrame.Visible = true end)
+SimBtn.MouseButton1Click:Connect(closeAll)
+NaoBtn.MouseButton1Click:Connect(function() ConfirmFrame.Visible = false end)
+
+-- ═══════════════════════════════════════════════════════
+-- 🔑 VALIDAÇÃO FINAL DA KEY
+-- ═══════════════════════════════════════════════════════
+
+local spinner = criarSpinner(KeyFrame)
+spinner.Position = UDim2.new(0.5, -20, 0.62, -20)
+spinner.ZIndex = 10
+
+SubmitBtn.MouseButton1Click:Connect(function()
+    if emCooldown then
+        notificar("Aguarde", "Cooldown ativo.", Color3.fromRGB(255, 180, 0))
+        return
+    end
+
+    local inserida = KeyBox.Text:gsub("%s+", "")
+    if inserida == "" then
+        notificar("Erro", "Digite uma key!", Color3.fromRGB(255, 80, 80))
+        return
+    end
+
+    spinner.Visible = true
+    SubmitBtn.Text = "VALIDANDO..."
+    SubmitBtn.BackgroundColor3 = Color3.fromRGB(100, 100, 120)
+
+    task.wait(1)
+    spinner.Visible = false
+
+    if isValidKey(inserida) then
+        KeyFrame.Visible = false
+        Ball.Visible = true
+        notificar("✅ Sucesso", "Bem-vindo ao DripRoul Hub!", Color3.fromRGB(0, 200, 130))
+    else
+        tentativas = tentativas + 1
+        local restantes = MAX_TENTATIVAS - tentativas
+
+        if restantes <= 0 then
+            KeyFrame.Visible = false
+            mostrarBloqueio("Você excedeu o número máximo de tentativas (" .. MAX_TENTATIVAS .. ").")
+            notificar("🔒 Bloqueado", "Você foi bloqueado!", Color3.fromRGB(255, 60, 80))
+        else
+            notificar("❌ Key Incorreta", "Tentativas restantes: " .. restantes, Color3.fromRGB(255, 80, 80))
+            TentativasLbl.Text = "Tentativas restantes: " .. restantes
+            KeyBox.Text = ""
+
+            emCooldown = true
+            task.spawn(function()
+                for i = COOLDOWN_SEGUNDOS, 1, -1 do
+                    SubmitBtn.Text = "AGUARDE " .. i .. "s"
+                    task.wait(1)
+                end
+                emCooldown = false
+                SubmitBtn.Text = "CONFIRMAR"
+                SubmitBtn.BackgroundColor3 = Color3.fromRGB(0, 140, 255)
+            end)
+        end
+    end
+end)
+
+Ball.MouseButton1Click:Connect(function()
+    MainFrame.Visible = not MainFrame.Visible
+    if MainFrame.Visible then
+        showTab("Patentes")
+        setBlur(8)
+    else
+        setBlur(0)
+    end
+end)
+
+-- ═══════════════════════════════════════════════════════
+-- 🎉 FINAL
+-- ═══════════════════════════════════════════════════════
+
+print("✅ DripRoul Hub v2.0 | Criador: PedroCarvalhosouz")
+notificar("💀 DripRoul v2.0", "Script carregado com sucesso!", Color3.fromRGB(0, 200, 255))
