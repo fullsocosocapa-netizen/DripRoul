@@ -1,0 +1,603 @@
+--[[
+    Nexus Hub Beta - Make Them Kneel (V25)
+    Auto-Cidade baseado em lista aleatória (do script antigo)
+]]
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local LocalPlayer = Players.LocalPlayer
+local UserInputService = game:GetService("UserInputService")
+local StarterGui = game:GetService("StarterGui")
+local Workspace = game:GetService("Workspace")
+local VirtualInputManager = game:GetService("VirtualInputManager")
+
+-- ============================================
+-- CONFIGURAÇÕES
+-- ============================================
+local KeyCorreta = "nexus hub beta"
+local DiscordLink = "https://discord.gg/RHqYE4e8b"
+local TentativasMaximas = 3
+
+local Config = {
+    AutoAjoelhar = false,
+    AutoCidade = false,
+    TempoMaximoNPC = 3.5
+}
+
+local npcsAjoelhados = {}
+local TarefaAjoelhar = nil
+
+-- Lista de nomes de cidades (igual ao script antigo)
+local Cidades = {
+    "Village", "Vila", "Town", "City", "Kingdom", "Castle", "King", 
+    "Gate", "Portao", "Nobles", "Nobres", "Mercado", "Market"
+}
+
+-- ============================================
+-- FUNÇÕES DO JOGO
+-- ============================================
+local function ProcessarNPC(npcRoot)
+    if not Config.AutoAjoelhar then return end
+    
+    local meuChar = LocalPlayer.Character
+    if not meuChar or not meuChar:FindFirstChild("HumanoidRootPart") then return end
+    
+    local npcPos = npcRoot.Position
+    local npcModel = npcRoot.Parent
+    
+    local posicaoIdeal = CFrame.new(npcPos + Vector3.new(0, 0, 2.5), npcPos)
+    meuChar.HumanoidRootPart.CFrame = posicaoIdeal
+    
+    local tempoGasto = 0
+    while tempoGasto < Config.TempoMaximoNPC do
+        if not Config.AutoAjoelhar then return end
+        
+        meuChar.HumanoidRootPart.CFrame = posicaoIdeal
+        
+        -- Tenta ProximityPrompt
+        local promptEncontrado = false
+        for _, prompt in ipairs(npcModel:GetDescendants()) do
+            if prompt:IsA("ProximityPrompt") then
+                pcall(function()
+                    prompt:InputHoldBegin()
+                    task.wait(0.05)
+                    prompt:InputHoldEnd()
+                end)
+                promptEncontrado = true
+                break
+            end
+        end
+        
+        -- Clique Virtual
+        if not promptEncontrado then
+            local screenSize = workspace.CurrentCamera.ViewportSize
+            pcall(function()
+                VirtualInputManager:SendMouseButtonEvent(screenSize.X/2, screenSize.Y/2, 0, true, game, 1)
+                task.wait(0.05)
+                VirtualInputManager:SendMouseButtonEvent(screenSize.X/2, screenSize.Y/2, 0, false, game, 1)
+            end)
+        end
+        
+        task.wait(0.25) 
+        tempoGasto = tempoGasto + 0.25
+    end
+    
+    npcsAjoelhados[npcModel] = true
+end
+
+local function AjoelharAreaAtual()
+    local meuChar = LocalPlayer.Character
+    if not meuChar or not meuChar:FindFirstChild("HumanoidRootPart") then return end
+    local minhaPos = meuChar.HumanoidRootPart.Position
+    
+    local npcsNaArea = {}
+    
+    for _, obj in ipairs(Workspace:GetDescendants()) do
+        if obj:IsA("Humanoid") and obj.Parent ~= meuChar and obj.Health > 0 then
+            local isPlayer = Players:GetPlayerFromCharacter(obj.Parent)
+            if not isPlayer and not npcsAjoelhados[obj.Parent] then
+                local root = obj.Parent:FindFirstChild("HumanoidRootPart")
+                if root and (root.Position - minhaPos).Magnitude <= 80 then
+                    table.insert(npcsNaArea, root)
+                end
+            end
+        end
+    end
+    
+    table.sort(npcsNaArea, function(a, b)
+        return (a.Position - minhaPos).Magnitude < (b.Position - minhaPos).Magnitude
+    end)
+    
+    for _, npc in ipairs(npcsNaArea) do
+        if not Config.AutoAjoelhar then break end
+        ProcessarNPC(npc)
+    end
+end
+
+-- ============================================
+-- TELEPORTE E AUTO-WALK (LÓGICA DO SCRIPT V2)
+-- ============================================
+local function TeleportePara(nomeAlvo)
+    for _, obj in ipairs(Workspace:GetDescendants()) do
+        if obj:IsA("Model") or obj:IsA("BasePart") then
+            local nome = obj.Name:lower()
+            local match = false
+            
+            for _, termo in ipairs(Cidades) do
+                if nome:find(termo:lower()) then
+                    match = true
+                    break
+                end
+            end
+            
+            -- Condição específica para o Rei
+            if nomeAlvo == "The King" and (nome:find("king") or nome:find("rei")) then
+                match = true
+            end
+
+            if match and (obj:FindFirstChild("HumanoidRootPart") or obj:IsA("BasePart")) then
+                local hrp = obj:FindFirstChild("HumanoidRootPart") or obj
+                local meuChar = LocalPlayer.Character
+                
+                if meuChar and meuChar:FindFirstChild("HumanoidRootPart") then
+                    meuChar.HumanoidRootPart.CFrame = hrp.CFrame * CFrame.new(0, 3, 5)
+                    return true
+                end
+            end
+        end
+    end
+    return false
+end
+
+local function IniciarAutoAjoelhar()
+    if TarefaAjoelhar then task.cancel(TarefaAjoelhar) end
+    
+    TarefaAjoelhar = task.spawn(function()
+        while Config.AutoAjoelhar do
+            AjoelharAreaAtual()
+            
+            if Config.AutoAjoelhar and Config.AutoCidade then
+                task.wait(1) 
+                -- Pega uma cidade aleatória e teleporta (igual script antigo)
+                local alvo = Cidades[math.random(1, #Cidades)]
+                TeleportePara(alvo)
+                task.wait(1.5)
+            end
+            task.wait(1)
+        end
+    end)
+end
+
+local function PararAutoAjoelhar()
+    Config.AutoAjoelhar = false
+    if TarefaAjoelhar then
+        pcall(function() task.cancel(TarefaAjoelhar) end)
+        TarefaAjoelhar = nil
+    end
+    npcsAjoelhados = {}
+end
+
+local function IrParaRei()
+    TeleportePara("The King")
+    task.wait(0.5)
+    AjoelharAreaAtual()
+end
+
+-- ============================================
+-- INTERFACE GRÁFICA
+-- ============================================
+local function CriarUI()
+    local ScreenGui = Instance.new("ScreenGui")
+    ScreenGui.Name = "NexusHubBetaUI"
+    ScreenGui.ResetOnSpawn = false
+    ScreenGui.Parent = game:GetService("CoreGui")
+    ScreenGui.IgnoreGuiInset = true
+
+    local TentativasRestantes = TentativasMaximas
+
+    -- 1. TELA DE KEY
+    local LoginFrame = Instance.new("Frame")
+    LoginFrame.Size = UDim2.new(0, 400, 0, 240)
+    LoginFrame.Position = UDim2.new(0.5, -200, 0.5, -120)
+    LoginFrame.BackgroundColor3 = Color3.fromRGB(10, 5, 15)
+    LoginFrame.BorderSizePixel = 0
+    LoginFrame.Parent = ScreenGui
+    Instance.new("UICorner", LoginFrame).CornerRadius = UDim.new(0, 12)
+    
+    local LoginStroke = Instance.new("UIStroke", LoginFrame)
+    LoginStroke.Color = Color3.fromRGB(160, 50, 255)
+    LoginStroke.Thickness = 2
+
+    local GalaxyBG = Instance.new("ImageLabel")
+    GalaxyBG.Size = UDim2.new(1, 0, 1, 0)
+    GalaxyBG.BackgroundTransparency = 1
+    GalaxyBG.Image = "rbxassetid://7050952839"
+    GalaxyBG.ScaleType = Enum.ScaleType.Crop
+    GalaxyBG.ZIndex = 1
+    GalaxyBG.Parent = LoginFrame
+    Instance.new("UICorner", GalaxyBG).CornerRadius = UDim.new(0, 12)
+
+    local DarkOverlay = Instance.new("Frame")
+    DarkOverlay.Size = UDim2.new(1, 0, 1, 0)
+    DarkOverlay.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    DarkOverlay.BackgroundTransparency = 0.4
+    DarkOverlay.ZIndex = 2
+    DarkOverlay.Parent = LoginFrame
+    Instance.new("UICorner", DarkOverlay).CornerRadius = UDim.new(0, 12)
+
+    local LogoText = Instance.new("TextLabel")
+    LogoText.Size = UDim2.new(1, 0, 0, 60)
+    LogoText.Position = UDim2.new(0, 0, 0, 10)
+    LogoText.BackgroundTransparency = 1
+    LogoText.Text = "👑 NEXUS HUB BETA"
+    LogoText.TextColor3 = Color3.fromRGB(200, 100, 255)
+    LogoText.Font = Enum.Font.GothamBlack
+    LogoText.TextSize = 24
+    LogoText.ZIndex = 3
+    LogoText.Parent = LoginFrame
+
+    local KeyBox = Instance.new("TextBox")
+    KeyBox.Size = UDim2.new(0, 280, 0, 40)
+    KeyBox.Position = UDim2.new(0.5, -140, 0, 70)
+    KeyBox.BackgroundColor3 = Color3.fromRGB(25, 15, 35)
+    KeyBox.PlaceholderText = "🔑 Digite sua key..."
+    KeyBox.Text = ""
+    KeyBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+    KeyBox.Font = Enum.Font.GothamMedium
+    KeyBox.TextSize = 14
+    KeyBox.ZIndex = 3
+    KeyBox.Parent = LoginFrame
+    Instance.new("UICorner", KeyBox).CornerRadius = UDim.new(0, 8)
+
+    local EnterBtn = Instance.new("TextButton")
+    EnterBtn.Size = UDim2.new(0, 280, 0, 40)
+    EnterBtn.Position = UDim2.new(0.5, -140, 0, 120)
+    EnterBtn.BackgroundColor3 = Color3.fromRGB(160, 50, 255)
+    EnterBtn.Text = "✔ Verificar Key"
+    EnterBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    EnterBtn.Font = Enum.Font.GothamBold
+    EnterBtn.TextSize = 14
+    EnterBtn.ZIndex = 3
+    EnterBtn.Parent = LoginFrame
+    Instance.new("UICorner", EnterBtn).CornerRadius = UDim.new(0, 8)
+
+    local StatusLbl = Instance.new("TextLabel")
+    StatusLbl.Size = UDim2.new(1, 0, 0, 20)
+    StatusLbl.Position = UDim2.new(0, 0, 0, 180)
+    StatusLbl.BackgroundTransparency = 1
+    StatusLbl.Text = "🛡️ Tentativas: " .. TentativasRestantes
+    StatusLbl.TextColor3 = Color3.fromRGB(200, 150, 255)
+    StatusLbl.Font = Enum.Font.GothamMedium
+    StatusLbl.TextSize = 12
+    StatusLbl.ZIndex = 3
+    StatusLbl.Parent = LoginFrame
+
+    local CopyDiscordBtn = Instance.new("TextButton")
+    CopyDiscordBtn.Size = UDim2.new(0, 280, 0, 25)
+    CopyDiscordBtn.Position = UDim2.new(0.5, -140, 0, 205)
+    CopyDiscordBtn.BackgroundColor3 = Color3.fromRGB(88, 101, 242)
+    CopyDiscordBtn.Text = "📋 Copiar Link do Discord"
+    CopyDiscordBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    CopyDiscordBtn.Font = Enum.Font.GothamMedium
+    CopyDiscordBtn.TextSize = 11
+    CopyDiscordBtn.ZIndex = 3
+    CopyDiscordBtn.Parent = LoginFrame
+    Instance.new("UICorner", CopyDiscordBtn).CornerRadius = UDim.new(0, 6)
+
+    CopyDiscordBtn.MouseButton1Click:Connect(function()
+        if setclipboard then setclipboard(DiscordLink) end
+    end)
+
+    -- 2. MENU PRINCIPAL
+    local Main = Instance.new("Frame")
+    Main.Size = UDim2.new(0, 550, 0, 300)
+    Main.Position = UDim2.new(0.5, -275, 0.5, -150)
+    Main.BackgroundColor3 = Color3.fromRGB(15, 15, 18)
+    Main.BorderSizePixel = 0
+    Main.Visible = false
+    Main.Parent = ScreenGui
+    Instance.new("UICorner", Main).CornerRadius = UDim.new(0, 10)
+
+    local MainGalaxyBG = Instance.new("ImageLabel")
+    MainGalaxyBG.Size = UDim2.new(1, 0, 1, 0)
+    MainGalaxyBG.BackgroundTransparency = 1
+    MainGalaxyBG.Image = "rbxassetid://7050952839"
+    MainGalaxyBG.ScaleType = Enum.ScaleType.Crop
+    MainGalaxyBG.ZIndex = 1
+    MainGalaxyBG.Parent = Main
+    Instance.new("UICorner", MainGalaxyBG).CornerRadius = UDim.new(0, 10)
+    
+    local MainOverlay = Instance.new("Frame")
+    MainOverlay.Size = UDim2.new(1, 0, 1, 0)
+    MainOverlay.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    MainOverlay.BackgroundTransparency = 0.6
+    MainOverlay.ZIndex = 2
+    MainOverlay.Parent = Main
+    Instance.new("UICorner", MainOverlay).CornerRadius = UDim.new(0, 10)
+
+    local TopBar = Instance.new("Frame")
+    TopBar.Size = UDim2.new(1, 0, 0, 40)
+    TopBar.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
+    TopBar.BackgroundTransparency = 0.2
+    TopBar.ZIndex = 3
+    TopBar.Parent = Main
+    Instance.new("UICorner", TopBar).CornerRadius = UDim.new(0, 10)
+
+    local Title = Instance.new("TextLabel")
+    Title.Size = UDim2.new(1, -100, 1, 0)
+    Title.Position = UDim2.new(0, 15, 0, 0)
+    Title.BackgroundTransparency = 1
+    Title.Text = "Nexus Hub Beta"
+    Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+    Title.Font = Enum.Font.GothamBold
+    Title.TextSize = 16
+    Title.TextXAlignment = Enum.TextXAlignment.Left
+    Title.ZIndex = 4
+    Title.Parent = TopBar
+
+    local MinimizeBtn = Instance.new("TextButton")
+    MinimizeBtn.Size = UDim2.new(0, 30, 0, 30)
+    MinimizeBtn.Position = UDim2.new(1, -40, 0, 5)
+    MinimizeBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+    MinimizeBtn.Text = "X"
+    MinimizeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    MinimizeBtn.Font = Enum.Font.GothamBold
+    MinimizeBtn.ZIndex = 4
+    MinimizeBtn.Parent = TopBar
+    Instance.new("UICorner", MinimizeBtn).CornerRadius = UDim.new(0, 6)
+
+    local Sidebar = Instance.new("Frame")
+    Sidebar.Size = UDim2.new(0, 150, 1, -40)
+    Sidebar.Position = UDim2.new(0, 0, 0, 40)
+    Sidebar.BackgroundColor3 = Color3.fromRGB(12, 12, 15)
+    Sidebar.BackgroundTransparency = 0.3
+    Sidebar.ZIndex = 3
+    Sidebar.Parent = Main
+    Instance.new("UICorner", Sidebar).CornerRadius = UDim.new(0, 10)
+
+    local Content = Instance.new("Frame")
+    Content.Size = UDim2.new(1, -150, 1, -40)
+    Content.Position = UDim2.new(0, 150, 0, 40)
+    Content.BackgroundTransparency = 1
+    Content.ZIndex = 3
+    Content.Parent = Main
+
+    local function CriarAbaBotao(texto, yPos, AbaFrame)
+        local Btn = Instance.new("TextButton")
+        Btn.Size = UDim2.new(1, -20, 0, 40)
+        Btn.Position = UDim2.new(0, 10, 0, yPos)
+        Btn.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
+        Btn.Text = "🏠 " .. texto
+        Btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        Btn.Font = Enum.Font.GothamBold
+        Btn.TextSize = 14
+        Btn.TextXAlignment = Enum.TextXAlignment.Left
+        Btn.ZIndex = 4
+        Btn.Parent = Sidebar
+        Instance.new("UICorner", Btn).CornerRadius = UDim.new(0, 6)
+        Btn.MouseButton1Click:Connect(function()
+            for _, child in ipairs(Content:GetChildren()) do
+                if child:IsA("Frame") then child.Visible = false end
+            end
+            AbaFrame.Visible = true
+        end)
+    end
+
+    local AbaMain = Instance.new("Frame")
+    AbaMain.Size = UDim2.new(1, 0, 1, 0)
+    AbaMain.BackgroundTransparency = 1
+    AbaMain.ZIndex = 4
+    AbaMain.Parent = Content
+
+    local AbaCreditos = Instance.new("Frame")
+    AbaCreditos.Size = UDim2.new(1, 0, 1, 0)
+    AbaCreditos.BackgroundTransparency = 1
+    AbaCreditos.Visible = false
+    AbaCreditos.ZIndex = 4
+    AbaCreditos.Parent = Content
+
+    CriarAbaBotao("Main", 15, AbaMain)
+    CriarAbaBotao("Créditos", 65, AbaCreditos)
+
+    local function CriarToggle(ParentFrame, texto, yPos, callback)
+        local ToggleFrame = Instance.new("Frame")
+        ToggleFrame.Size = UDim2.new(1, -40, 0, 45)
+        ToggleFrame.Position = UDim2.new(0, 20, 0, yPos)
+        ToggleFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
+        ToggleFrame.BackgroundTransparency = 0.3
+        ToggleFrame.ZIndex = 4
+        ToggleFrame.Parent = ParentFrame
+        Instance.new("UICorner", ToggleFrame).CornerRadius = UDim.new(0, 8)
+
+        local Txt = Instance.new("TextLabel")
+        Txt.Size = UDim2.new(1, -60, 1, 0)
+        Txt.Position = UDim2.new(0, 15, 0, 0)
+        Txt.BackgroundTransparency = 1
+        Txt.Text = texto
+        Txt.TextColor3 = Color3.fromRGB(255, 255, 255)
+        Txt.Font = Enum.Font.GothamMedium
+        Txt.TextSize = 14
+        Txt.TextXAlignment = Enum.TextXAlignment.Left
+        Txt.ZIndex = 5
+        Txt.Parent = ToggleFrame
+
+        local Btn = Instance.new("TextButton")
+        Btn.Size = UDim2.new(0, 40, 0, 20)
+        Btn.Position = UDim2.new(1, -55, 0.5, -10)
+        Btn.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
+        Btn.Text = ""
+        Btn.ZIndex = 5
+        Btn.Parent = ToggleFrame
+        Instance.new("UICorner", Btn).CornerRadius = UDim.new(1, 0)
+
+        local Circle = Instance.new("Frame")
+        Circle.Size = UDim2.new(0, 16, 0, 16)
+        Circle.Position = UDim2.new(0, 2, 0.5, -8)
+        Circle.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+        Circle.ZIndex = 6
+        Circle.Parent = Btn
+        Instance.new("UICorner", Circle).CornerRadius = UDim.new(1, 0)
+
+        local isToggled = false
+        Btn.MouseButton1Click:Connect(function()
+            isToggled = not isToggled
+            if isToggled then
+                Btn.BackgroundColor3 = Color3.fromRGB(160, 50, 255)
+                Circle.Position = UDim2.new(1, -18, 0.5, -8)
+            else
+                Btn.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
+                Circle.Position = UDim2.new(0, 2, 0.5, -8)
+            end
+            pcall(callback, isToggled)
+        end)
+    end
+
+    CriarToggle(AbaMain, "Auto-Ajoelhar (Instantâneo)", 15, function(s) 
+        if s then
+            Config.AutoAjoelhar = true
+            IniciarAutoAjoelhar()
+        else
+            PararAutoAjoelhar()
+        end
+    end)
+    
+    CriarToggle(AbaMain, "Auto-Cidade (Avançar)", 70, function(s) 
+        Config.AutoCidade = s 
+        if not s then npcsAjoelhados = {} end 
+    end)
+
+    local btnRei = Instance.new("TextButton")
+    btnRei.Size = UDim2.new(1, -40, 0, 40)
+    btnRei.Position = UDim2.new(0, 20, 0, 125)
+    btnRei.BackgroundColor3 = Color3.fromRGB(180, 120, 40)
+    btnRei.Text = "👑 Teleportar para o Rei"
+    btnRei.TextColor3 = Color3.fromRGB(255, 255, 255)
+    btnRei.Font = Enum.Font.GothamBold
+    btnRei.TextSize = 14
+    btnRei.ZIndex = 5
+    btnRei.Parent = AbaMain
+    Instance.new("UICorner", btnRei).CornerRadius = UDim.new(0, 8)
+    btnRei.MouseButton1Click:Connect(function() IrParaRei() end)
+
+    -- ABA CRÉDITOS
+    local CreditosText = Instance.new("TextLabel")
+    CreditosText.Size = UDim2.new(1, -40, 1, -40)
+    CreditosText.Position = UDim2.new(0, 20, 0, 10)
+    CreditosText.BackgroundTransparency = 1
+    CreditosText.Text = "👑 NEXUS HUB BETA 👑\n\n🏆 Fundador:\n✨ o_sortudo89 ✨\n\n💻 Desenvolvedor:\n✨ o_sortudo89 ✨\n\nPrecisa de ajuda?\nEntre no nosso servidor do Discord!"
+    CreditosText.TextColor3 = Color3.fromRGB(255, 255, 255)
+    CreditosText.Font = Enum.Font.GothamMedium
+    CreditosText.TextSize = 15
+    CreditosText.TextYAlignment = Enum.TextYAlignment.Top
+    CreditosText.ZIndex = 5
+    CreditosText.Parent = AbaCreditos
+
+    local btnDiscord = Instance.new("TextButton")
+    btnDiscord.Size = UDim2.new(1, -40, 0, 40)
+    btnDiscord.Position = UDim2.new(0, 20, 0, 180)
+    btnDiscord.BackgroundColor3 = Color3.fromRGB(88, 101, 242)
+    btnDiscord.Text = "💬 Entrar no Discord"
+    btnDiscord.TextColor3 = Color3.fromRGB(255, 255, 255)
+    btnDiscord.Font = Enum.Font.GothamBold
+    btnDiscord.TextSize = 14
+    btnDiscord.ZIndex = 5
+    btnDiscord.Parent = AbaCreditos
+    Instance.new("UICorner", btnDiscord).CornerRadius = UDim.new(0, 8)
+    btnDiscord.MouseButton1Click:Connect(function()
+        if setclipboard then setclipboard(DiscordLink) end
+    end)
+
+    -- BOTÃO FLUTUANTE (X)
+    local FloatingBtn = Instance.new("TextButton")
+    FloatingBtn.Size = UDim2.new(0, 160, 0, 40)
+    FloatingBtn.Position = UDim2.new(0, 20, 0.5, -20)
+    FloatingBtn.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
+    FloatingBtn.Text = "Nexus Hub Beta"
+    FloatingBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    FloatingBtn.Font = Enum.Font.GothamBold
+    FloatingBtn.TextSize = 14
+    FloatingBtn.Visible = false
+    FloatingBtn.Active = true
+    FloatingBtn.Parent = ScreenGui
+    Instance.new("UICorner", FloatingBtn).CornerRadius = UDim.new(0, 8)
+
+    local FloatStroke = Instance.new("UIStroke", FloatingBtn)
+    FloatStroke.Color = Color3.fromRGB(160, 50, 255)
+    FloatStroke.Thickness = 1
+
+    MinimizeBtn.MouseButton1Click:Connect(function()
+        Main.Visible = false
+        FloatingBtn.Visible = true
+    end)
+
+    -- Arrastar o botão flutuante
+    local fDragging, fDragInput, fDragStart, fStartPos
+    FloatingBtn.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            fDragging = true
+            fDragStart = input.Position
+            fStartPos = FloatingBtn.Position
+        end
+    end)
+    UserInputService.InputChanged:Connect(function(input)
+        if input == fDragInput and fDragging then
+            local delta = input.Position - fDragStart
+            FloatingBtn.Position = UDim2.new(fStartPos.X.Scale, fStartPos.X.Offset + delta.X, fStartPos.Y.Scale, fStartPos.Y.Offset + delta.Y)
+        end
+        if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+            fDragInput = input
+        end
+    end)
+    UserInputService.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then 
+            if fDragging then
+                local dist = (input.Position - fDragStart).Magnitude
+                if dist < 10 then
+                    Main.Visible = true
+                    FloatingBtn.Visible = false
+                end
+            end
+            fDragging = false 
+        end
+    end)
+
+    -- LÓGICA DE LOGIN
+    EnterBtn.MouseButton1Click:Connect(function()
+        if string.lower(KeyBox.Text) == KeyCorreta then
+            LoginFrame.Visible = false
+            Main.Visible = true
+        else
+            TentativasRestantes = TentativasRestantes - 1
+            if TentativasRestantes > 0 then
+                StatusLbl.Text = "Key Incorreta! Restam " .. TentativasRestantes
+                StatusLbl.TextColor3 = Color3.fromRGB(255, 150, 50)
+                KeyBox.Text = ""
+            else
+                LoginFrame.Visible = false
+                StarterGui:SetCore("SendNotification", {Title="Bloqueado", Text="Você errou 3 vezes. Entre no Discord.", Duration=5})
+            end
+        end
+    end)
+
+    -- Arrastar Menu Principal
+    local dragging, dragInput, dragStart, startPos
+    TopBar.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true; dragStart = input.Position; startPos = Main.Position
+        end
+    end)
+    UserInputService.InputChanged:Connect(function(input)
+        if input == dragInput and dragging then
+            local delta = input.Position - dragStart
+            Main.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+        end
+        if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+            dragInput = input
+        end
+    end)
+    UserInputService.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then dragging = false end
+    end)
+end
+
+CriarUI()
